@@ -117,17 +117,17 @@ Dari `origin/dev` terbaru. Satu branch per fitur.
 
 | Fitur | Penanggung jawab | Branch |
 |---|---|---|
-| A. Fondasi Firebase, Auth, AI, Security Rules, Review Izin | **Dewa** | `feature/firebase-auth-ai` |
+| A. Fondasi Firebase, Auth, AI Lokal (`model-edom`), Security Rules, Review Izin | **Dewa** | `feature/firebase-auth-ai` |
 | B. Pengelolaan praktikum Asprak (CRUD, buka/tutup sesi, rekap realtime, pindah kelas) | **Mischa** | `feature/asprak-praktikum` |
 | C. Sisi Praktikan (jadwal/sesi kelasnya, presensi, pengajuan & pantau izin) | **Andiny** | `feature/praktikan-presensi-izin` |
 
 ## Urutan kerja (penting: ada satu ketergantungan)
-1. **Fase 0 — Fondasi (Dewa, dikerjakan PERTAMA):** `package.json` + dependency, `src/lib/firebase.ts`, `src/types/index.ts`, `AuthContext`, route guard, login, seed data, `.env.example`. PM merge ke `dev` secepat mungkin; Mischa dan Andiny `merge origin/dev` ke branch masing-masing begitu tersedia. Target: selesai paling awal, sebelum fitur lain butuh menguji dengan Firebase sungguhan.
-2. **Fase 1 — Paralel:** Mischa dan Andiny **boleh langsung mulai** menulis UI, hook, dan service berdasarkan kontrak di bawah tanpa menunggu Fase 0 (impor dari path kontrak). Pengujian dengan Firestore sungguhan menunggu Fase 0 di-merge. Dewa melanjutkan AI, Rules, Review Izin.
+1. **Fase 0 — Fondasi (Dewa, dikerjakan PERTAMA):** `package.json` + dependency, `src/lib/firebase.ts`, ekstrak `sentiment.js` + `model-edom.json` dari `model-edom.zip` ke `src/lib/ai/`, `src/services/ai.ts`, `src/types/index.ts`, `AuthContext`, route guard, login, seed data, `.env.example`. PM merge ke `dev` secepat mungkin; Mischa dan Andiny `merge origin/dev` ke branch masing-masing begitu tersedia. Target: selesai paling awal, sebelum fitur lain butuh menguji dengan Firebase sungguhan.
+2. **Fase 1 — Paralel:** Mischa dan Andiny **boleh langsung mulai** menulis UI, hook, dan service berdasarkan kontrak di bawah tanpa menunggu Fase 0 (impor dari path kontrak). Pengujian dengan Firestore sungguhan dan model AI lokal menunggu Fase 0 di-merge. Dewa melanjutkan Rules dan Review Izin.
 3. **Fase 2 — Integrasi (PM + semua):** merge satu per satu, jalankan **Demo PM Sprint 2** di `PRD.md`, perbaiki bug lintas fitur oleh pemilik modulnya.
 
 ## Kepemilikan file Sprint 2 — tidak boleh overlap
-Path relatif root repository. File di luar daftar milik sendiri **tidak boleh disentuh**, termasuk `src/app/explore.tsx`, `src/features/jadwal.tsx`, `AGENTS.md`, tema global, dan komponen starter.
+Path relatif root repository. File di luar daftar milik sendiri **tidak boleh disentuh**, termasuk `model-edom.zip`, `src/app/explore.tsx`, `src/features/jadwal.tsx`, `AGENTS.md`, tema global, dan komponen starter.
 
 | Orang | File yang boleh dibuat/diubah |
 |---|---|
@@ -156,7 +156,9 @@ export type ClassDoc  = { id: string; name: string };
 export type Schedule  = { id: string; classId: string; course: string; dayOfWeek: number; startTime: string; endTime: string; room: string };
 export type Session   = { id: string; classId: string; scheduleId: string | null; title: string; date: string; startTime: string; endTime: string; status: SessionStatus; openedAt: Date | null; closedAt: Date | null };
 export type Attendance = { uid: string; name: string; classId: string; attendedAt: Date | null };
-export type AiResult  = { status: 'ok' | 'gagal' | 'timeout'; category: string | null; model: string | null };
+export type SentimentLabel = 'positif' | 'netral' | 'negatif';
+export type AiStatus = 'predicted' | 'unknown_vocabulary' | 'empty_input' | 'gagal';
+export type AiResult  = { status: AiStatus; label: SentimentLabel | null; model: string; experimental: boolean };
 export type PermissionRequest = { id: string; uid: string; name: string; classId: string; sessionId: string; sessionTitle: string; reason: string; status: PermissionStatus; aiResult: AiResult; decidedBy: string | null; decidedAt: Date | null; createdAt: Date | null };
 
 // src/context/auth-context.tsx
@@ -174,7 +176,7 @@ export function useNetwork(): { isOnline: boolean };
 // src/components/user-header.tsx     -> <UserHeader />      (nama, peran, tombol logout; dipasang tiap layar fitur)
 
 // src/services/ai.ts
-export function classifyReason(reason: string): Promise<AiResult>;   // TIDAK PERNAH melempar; timeout 10 dtk -> {status:'timeout'}, error -> {status:'gagal'}
+export function classifyReason(reason: string): AiResult;   // Inferensi lokal sinkron (model-edom.json + sentiment.js). TIDAK PERNAH melempar; error -> { status: 'gagal', label: null, model: 'model-edom', experimental: true }
 ```
 Konversi `Timestamp` → `Date` dilakukan di service masing-masing saat membaca (`.toDate()`), sehingga UI memakai tipe di atas.
 
@@ -232,15 +234,16 @@ Branch: `feature/firebase-auth-ai`. Kebutuhan PRD: #1, #6, #7, #8 + infrastruktu
 - `src/app/index.tsx`: hanya pengalih. Logout melalui `UserHeader`.
 - Sesi login bertahan setelah app ditutup.
 
-**A2. Integrasi AI (#6)**
-- Dewa menerima API dari pengajar dan **mengelola API key** (`EXPO_PUBLIC_AI_API_URL`, `EXPO_PUBLIC_AI_API_KEY` di `.env.local`; tidak pernah di-commit, tidak di-log, tidak ditulis di dokumen/PR).
-- `src/services/ai.ts` → `classifyReason(reason)`: kirim alasan ke API, petakan respons ke `AiResult` (`category`, `model`). Timeout 10 dtk (`AbortController`). **Tidak pernah melempar**; kegagalan → `status 'gagal'`, timeout → `'timeout'`, respons tak valid → `'gagal'`.
-- Dokumentasikan format request/response API di komentar header file (agar teman bisa memahami) dan umumkan ke PM bila daftar kategori diketahui.
-- Catat batasan: hasil AI hanya informasi pendukung dan tidak mengubah `status` izin.
+**A2. Integrasi AI Lokal (`model-edom.zip`) (#6)**
+- **Tidak ada API AI eksternal dan tidak ada API key AI** (revisi asisten praktikum). Dewa hanya mengelola config Firebase di `.env.local` (`EXPO_PUBLIC_FIREBASE_*`; tidak pernah di-commit, tidak di-log, tidak ditulis di dokumen/PR).
+- Ekstrak `sentiment.js` dan `model-edom.json` dari `model-edom.zip` ke `src/lib/ai/` (jangan hapus `model-edom.zip` di root; `requirements.txt` tidak diperlukan di React Native). Tambahkan deklarasi tipe `src/lib/ai/sentiment.d.ts` jika diperlukan agar `npx tsc --noEmit` dan `npx expo lint` lulus.
+- `src/services/ai.ts` → `classifyReason(reason)`: inisialisasi `createSentimentClassifier(model)` sekali di level modul, jalankan prediksi secara sinkron & lokal, lalu kembalikan `AiResult` (`status`: `'predicted' | 'unknown_vocabulary' | 'empty_input' | 'gagal'`, `label`: `'positif' | 'netral' | 'negatif' | null`, `model: 'model-edom'`, `experimental: true`). Bungkus dengan `try/catch` agar **tidak pernah melempar** (`status: 'gagal'`, `label: null` jika error).
+- **Aturan penting sesuai `README.md` dalam `model-edom.zip`:** bila `label === null` (`unknown_vocabulary` / `empty_input`), **jangan pernah mengubahnya menjadi `'netral'`**.
+- Catat batasan di komentar/UI: model berbasis data EDOM hanya sebagai info pendukung dan tidak mengubah `status` izin.
 
 **A3. Review izin Asprak (#7)**
 - `src/services/izin-review.ts` + `src/features/izin-review.tsx` + `src/app/asisten-izin.tsx` (rute khusus Asprak).
-- Daftar izin realtime: nama, kelas, sesi, alasan, **kategori AI** (atau "Klasifikasi tidak tersedia"), status, waktu. Filter status (Semua/Menunggu/Disetujui/Ditolak), kondisi kosong/loading/error.
+- Daftar izin realtime: nama, kelas, sesi, alasan, **hasil sentimen AI** (tampilkan `Sentimen AI: <label> (info pendukung)` bila `status === 'predicted'` dan `label != null`; atau `"Klasifikasi tidak tersedia"` bila `label == null` — jangan tampilkan `"netral"` untuk `label == null`), status, waktu. Filter status (Semua/Menunggu/Disetujui/Ditolak), kondisi kosong/loading/error.
 - Tombol Setujui/Tolak dengan modal konfirmasi; **selalu aktif untuk status `menunggu`** apa pun hasil AI. Setelah diputuskan, tombol hilang dan status terkunci (sesuai rules).
 - `decidePermission` mengisi `status`, `decidedBy`, `decidedAt` saja.
 
@@ -256,7 +259,7 @@ Branch: `feature/firebase-auth-ai`. Kebutuhan PRD: #1, #6, #7, #8 + infrastruktu
   7. Asprak mengubah field selain `classId` pada `users`; praktikan mengubah `classId` sendiri. (Asprak memindahkan `classId` praktikan = ok.)
 - Simpan ringkasan hasil uji (tabel lulus/gagal) untuk PM.
 
-**Tes mandiri Dewa:** login benar/salah/kosong; tutup-buka app tetap login; logout; user tanpa dokumen `users`; rute dijaga per peran; AI normal, API mati, timeout, respons rusak; review izin setujui/tolak; seed dijalankan dua kali tanpa duplikat.
+**Tes mandiri Dewa:** login benar/salah/kosong; tutup-buka app tetap login; logout; user tanpa dokumen `users`; rute dijaga per peran; model AI lokal mengklasifikasi teks normal (`positif`/`netral`/`negatif`), mengembalikan `label: null` untuk `unknown_vocabulary` (tidak dianggap `netral`) dan `empty_input`, berjalan tanpa internet; review izin setujui/tolak tetap aktif saat `label: null`; seed dijalankan dua kali tanpa duplikat.
 
 ---
 
@@ -285,11 +288,11 @@ Branch: `feature/praktikan-presensi-izin`. Melanjutkan modul Praktikan Sprint 1 
   - Cegah klik ganda (state `submitting`), tolak saat offline dengan pesan.
 - `src/services/izin.ts`: `submitPermission(user, session, reason)`:
   1. validasi `reason` (10–300 karakter, trim) dan bahwa sesi belum `ditutup` dan milik kelasnya;
-  2. panggil `classifyReason(reason)` milik Dewa (tidak pernah melempar);
+  2. panggil `classifyReason(reason)` milik Dewa (sinkron & lokal, tidak pernah melempar);
   3. tulis **satu dokumen** `permissions/{sessionId}_{uid}` berisi `status:'menunggu'`, `aiResult` hasil AI, `decidedBy/decidedAt: null`, `createdAt: serverTimestamp()`. Jika dokumen sudah ada, tolak dengan pesan "Anda sudah mengajukan izin untuk sesi ini".
-  - Pengajuan **tidak boleh bergantung pada AI**: bila AI gagal/timeout, pengajuan tetap disimpan.
-- `/izin` (`src/features/izin-praktikan.tsx`): form pilih sesi (atau dari `sessionId`), isi alasan dengan penghitung karakter, tombol kirim (nonaktif saat memproses; tampilkan "Mengklasifikasi…" lalu hasil). Bagian **Riwayat pengajuan** realtime: sesi, alasan, status (Menunggu/Disetujui/Ditolak), kategori AI sebagai info pendukung (atau "Klasifikasi tidak tersedia"), waktu. Status berubah otomatis saat Asprak memutuskan.
-- Tes mandiri: presensi saat dibuka berhasil; belum dibuka/ditutup ditolak; ketukan ganda dan presensi kedua tidak membuat duplikat; sesi kelas lain tidak tampil; status sesi berubah realtime dari perangkat Asprak; izin dengan AI normal, AI mati, timeout; alasan kosong/terlalu pendek/terlalu panjang; izin ganda untuk sesi sama ditolak; status izin berubah realtime setelah diputuskan; offline menolak aksi; tutup-buka app data tetap.
+  - Pengajuan **tidak boleh bergantung pada AI**: bila `aiResult.label === null` (`unknown_vocabulary` / error), pengajuan tetap disimpan dan **tidak** dianggap `'netral'`.
+- `/izin` (`src/features/izin-praktikan.tsx`): form pilih sesi (atau dari `sessionId`), isi alasan dengan penghitung karakter, tombol kirim (nonaktif saat memproses). Bagian **Riwayat pengajuan** realtime: sesi, alasan, status (Menunggu/Disetujui/Ditolak), hasil sentimen AI sebagai info pendukung (atau "Klasifikasi tidak tersedia" jika `label == null`), waktu. Status berubah otomatis saat Asprak memutuskan.
+- Tes mandiri: presensi saat dibuka berhasil; belum dibuka/ditutup ditolak; ketukan ganda dan presensi kedua tidak membuat duplikat; sesi kelas lain tidak tampil; status sesi berubah realtime dari perangkat Asprak; izin dengan teks terbaca model (`predicted`) maupun teks tidak dikenal kosakata model (`unknown_vocabulary` / `label: null`) tetap tersimpan; alasan kosong/terlalu pendek/terlalu panjang ditolak; izin ganda untuk sesi sama ditolak; status izin berubah realtime setelah diputuskan; offline menolak aksi; tutup-buka app data tetap.
 
 ---
 

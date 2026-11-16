@@ -71,9 +71,11 @@ Langkah 5–6 menggunakan simulasi terpisah, bukan sinkronisasi lintas peran. Se
 ## Tujuan
 Mengembangkan aplikasi Sprint 1 (UI + alur praktikum dengan data dummy lokal) menjadi aplikasi **multi-user** dengan data **permanen dan realtime**. Praktikan dan Asprak login dengan akun masing-masing, mengakses data yang sama, dan melihat informasi/tindakan sesuai peran. Praktikan yang berhalangan dapat mengajukan izin yang diperiksa Asprak dengan bantuan klasifikasi AI.
 
-Teknologi wajib: **Firebase Authentication** (Email/Password), **Cloud Firestore** (data + listener realtime + Security Rules), **API model AI dari pengajar** (klasifikasi alasan izin).
+Teknologi wajib: **Firebase Authentication** (Email/Password), **Cloud Firestore** (data + listener realtime + Security Rules), **Model AI lokal on-device dari `model-edom.zip`** (`sentiment.js` + `model-edom.json`, klasifikasi sentimen alasan izin secara lokal di perangkat).
 
-> Catatan: "firebase notification" pada notulensi = **Firebase Authentication** (sudah dikonfirmasi PM). Push notification **tidak** termasuk scope.
+> Catatan:
+> - "firebase notification" pada notulensi = **Firebase Authentication** (sudah dikonfirmasi PM). Push notification **tidak** termasuk scope.
+> - Revisi ketentuan asisten praktikum: **tidak ada API AI dari pengajar**. Sebagai gantinya, klasifikasi AI menggunakan bahan dan panduan di **`model-edom.zip`** pada root repository.
 
 ## Keputusan PM (final)
 | Topik | Keputusan |
@@ -83,7 +85,8 @@ Teknologi wajib: **Firebase Authentication** (Email/Password), **Cloud Firestore
 | Plotting kelas | Setiap praktikan sudah di-plot ke **satu kelas** (`users.classId`) lewat seed. Asprak dapat **memindahkan** praktikan ke kelas lain. |
 | Kode Sprint 1 | **Jangan hapus/ganti `src/`.** Modul lama dikembangkan/diganti isinya sesuai kepemilikan file (lihat `PEMBAGIAN.md`). |
 | SDK | Firebase **JS SDK** (`firebase`), kompatibel Expo Go dan dev build. Bukan `@react-native-firebase`. |
-| API key | Disimpan di `.env.local` (sudah di-ignore git). Tidak boleh di-commit. Dikelola Dewa. |
+| Konfigurasi & API Key | Variabel Firebase Web Config (`EXPO_PUBLIC_FIREBASE_*`) disimpan di `.env.local` (di-ignore git, dikelola Dewa). **Tidak ada API key AI** karena model AI berjalan lokal di perangkat. |
+| Model AI | Menggunakan `sentiment.js` + `model-edom.json` dari `model-edom.zip` (LinearSVC TF-IDF, output sentimen `positif` / `netral` / `negatif` atau `null`). Inferensi murni JavaScript di perangkat, tanpa internet dan tanpa Python runtime. |
 
 ## Kebutuhan fungsional (dari notulensi, 8 poin) dan pemetaannya
 | # | Kebutuhan | Ringkasan penerimaan | Pemilik |
@@ -93,14 +96,14 @@ Teknologi wajib: **Firebase Authentication** (Email/Password), **Cloud Firestore
 | 3 | Presensi | Praktikan presensi hanya saat sesi `dibuka`; 1 kali per sesi; tersimpan per identitas+sesi. | Andiny |
 | 4 | Sync realtime | Status sesi, presensi, rekap tampil tanpa restart (`onSnapshot`); data tetap ada setelah app dibuka ulang. | Mischa & Andiny |
 | 5 | Pengajuan izin | Praktikan isi alasan; tersimpan di Firestore; status dapat dipantau. | Andiny |
-| 6 | Integrasi AI | Alasan dikirim ke API pengajar → kategori ditampilkan sebagai **info pendukung**. AI **tidak** menentukan acc/tolak. | Dewa |
-| 7 | Review izin | Asprak lihat daftar izin + alasan + hasil AI, lalu setujui/tolak; tersimpan. | Dewa |
-| 8 | Validasi & keamanan | Input tak valid, gagal auth, role-based access, **Firestore Security Rules**, kondisi belum login/offline/AI tidak merespons. | Dewa (rules, infra), semua (validasi fitur sendiri) |
+| 6 | Integrasi AI | Alasan diklasifikasikan secara lokal oleh model `model-edom.json` (`sentiment.js`) → hasil sentimen ditampilkan sebagai **info pendukung**. AI **tidak** menentukan acc/tolak. | Dewa |
+| 7 | Review izin | Asprak lihat daftar izin + alasan + hasil klasifikasi AI, lalu setujui/tolak; tersimpan. | Dewa |
+| 8 | Validasi & keamanan | Input tak valid, gagal auth, role-based access, **Firestore Security Rules**, kondisi belum login/offline/model AI tidak mengenali teks (`label: null`). | Dewa (rules, infra), semua (validasi fitur sendiri) |
 
 ## Dua alur akhir yang harus berjalan (demo)
 **Alur 1 — Presensi:** Asprak login → buka sesi → Praktikan login (perangkat/akun lain) → presensi → data masuk Firestore → Asprak melihat rekap **realtime** → Asprak menutup sesi → praktikan melihat sesi tertutup.
 
-**Alur 2 — Izin:** Praktikan login → ajukan izin dengan alasan → AI mengklasifikasi (hasil disimpan bersama pengajuan) → Asprak melihat daftar izin + alasan + kategori AI → Asprak setujui/tolak → Praktikan melihat status baru secara realtime.
+**Alur 2 — Izin:** Praktikan login → ajukan izin dengan alasan → model AI lokal (`model-edom`) mengklasifikasi alasan (hasil disimpan bersama pengajuan) → Asprak melihat daftar izin + alasan + hasil AI → Asprak setujui/tolak → Praktikan melihat status baru secara realtime.
 
 Semua perubahan persisten dan konsisten antar peran.
 
@@ -156,9 +159,10 @@ permissions/{sessionId}_{uid}             // docId gabungan => 1 pengajuan per s
   reason: string
   status: "menunggu" | "disetujui" | "ditolak"
   aiResult: {
-    status: "ok" | "gagal" | "timeout"
-    category: string | null     // diisi jika status "ok"
-    model: string | null
+    status: "predicted" | "unknown_vocabulary" | "empty_input" | "gagal"
+    label: "positif" | "netral" | "negatif" | null   // null jika status bukan "predicted"
+    model: string                                     // mis. "model-edom"
+    experimental: boolean                             // true (sesuai metadata model-edom)
   }
   decidedBy: string | null      // uid asprak
   decidedAt: Timestamp | null
@@ -184,13 +188,18 @@ Dilakukan oleh developer, bukan lewat UI. Harus bisa dijalankan ulang (idempoten
 Kelas: `SI-5A`, `SI-5B`. Sesi awal (dari Sprint 1): `s1` Pemrograman Perangkat Bergerak / SI-5A / 08.00–09.40 / `belum_dibuka`; `s2` Basis Data / SI-5B / 10.00–11.40 / `belum_dibuka`; `s3` Visi Komputer / SI-5A / 13.00–14.40 / `ditutup`. Jadwal awal sesuai tiga sesi tersebut. Password akun dibagikan Dewa secara pribadi, **tidak ditulis di repository**.
 
 ## Kebutuhan teknis lintas fitur
-- **Konfigurasi**: variabel `EXPO_PUBLIC_FIREBASE_API_KEY`, `..._AUTH_DOMAIN`, `..._PROJECT_ID`, `..._STORAGE_BUCKET`, `..._MESSAGING_SENDER_ID`, `..._APP_ID`, serta `EXPO_PUBLIC_AI_API_URL` dan `EXPO_PUBLIC_AI_API_KEY` di `.env.local`. Sediakan `.env.example` (tanpa nilai rahasia). Setelah mengubah env, restart Expo.
+- **Konfigurasi**: variabel `EXPO_PUBLIC_FIREBASE_API_KEY`, `..._AUTH_DOMAIN`, `..._PROJECT_ID`, `..._STORAGE_BUCKET`, `..._MESSAGING_SENDER_ID`, `..._APP_ID` di `.env.local`. Sediakan `.env.example` (tanpa nilai rahasia). Setelah mengubah env, restart Expo. **Tidak ada variabel env untuk AI.**
 - **Auth persistence**: login bertahan setelah app ditutup (`getReactNativePersistence` + AsyncStorage, dipasang lewat `npx expo install`).
 - **Offline**: Firestore JS SDK di React Native **tidak punya cache persisten di disk**. Data tetap permanen di server; saat offline aplikasi menampilkan banner dan data terakhir yang ada di memori, serta **menolak aksi tulis dengan pesan jelas** (jangan mengira tulis offline akan tersinkron setelah app ditutup).
 - **State**: `AuthContext` global; tiap fitur memakai hook dengan `onSnapshot` dan **wajib unsubscribe** saat unmount/logout.
 - **Setiap layar data** menangani 4 kondisi: loading, error, kosong, dan terisi.
 - **Validasi**: email/password tidak kosong; alasan izin minimal 10 karakter dan maksimal 300; input CRUD (nama, tanggal `YYYY-MM-DD`, jam `HH:MM`, jam selesai > mulai) divalidasi sebelum tulis. Pesan error dalam Bahasa Indonesia, tidak menampilkan error mentah Firebase.
-- **AI**: timeout 10 detik; jika gagal/timeout, pengajuan tetap tersimpan dengan `aiResult.status = "gagal"|"timeout"`. UI Asprak menampilkan "Klasifikasi tidak tersedia". Tombol setujui/tolak **tidak pernah bergantung pada hasil AI**.
+- **AI (Model Lokal `model-edom.zip`)**:
+  - Ekstrak `sentiment.js` dan `model-edom.json` dari `model-edom.zip` ke kode aplikasi (tanpa Python/`requirements.txt` di aplikasi).
+  - Inferensi berjalan **sinkron dan lokal (on-device)**, tanpa panggilan jaringan dan tanpa timeout.
+  - Jika alasan kosong (`empty_input`), tidak ada kata yang dikenali kosakata model (`unknown_vocabulary`), atau error internal (`gagal`), `aiResult.label` bernilai `null`. **Jangan menganggap `label: null` sebagai sentimen `netral`.** UI menampilkan "Klasifikasi tidak tersedia" / "Belum dapat dianalisis (bukan netral)".
+  - Pengajuan izin **tetap tersimpan** ke Firestore meskipun `label: null` atau model error; tombol setujui/tolak Asprak **tidak pernah bergantung pada hasil AI**.
+  - UI Asprak menampilkan hasil AI secara eksplisit sebagai **info pendukung (model sentimen EDOM — bukan penentu keputusan)**.
 - **Dokumentasi Expo**: sebelum memakai API Expo/Firebase, baca dokumentasi sesuai versi (project memakai Expo SDK 57; lihat `AGENTS.md`). Jangan mengandalkan memori.
 
 ## Security Rules (spesifikasi untuk `firestore.rules`, dikerjakan Dewa)
@@ -212,7 +221,7 @@ Rules diuji dengan Rules Playground atau Firebase Emulator. Kasus uji wajib ada 
 - Tutup dan buka ulang app: login dan data tetap ada.
 - Praktikan **tidak bisa** presensi dua kali, presensi saat sesi tidak `dibuka`, presensi di kelas lain, atau membaca data praktikan lain (ditolak oleh rules, bukan hanya UI).
 - Asprak dapat CRUD kelas/jadwal/sesi dan memindahkan praktikan antar kelas; praktikan hanya melihat jadwal/sesi kelasnya setelah dipindah (tanpa restart).
-- Izin tersimpan dengan hasil AI; AI mati/lambat tidak memblokir pengajuan; keputusan Asprak muncul realtime di praktikan.
+- Izin tersimpan dengan hasil AI (`model-edom`); teks yang tidak terbaca model (`label: null`) tidak memblokir pengajuan maupun persetujuan; keputusan Asprak muncul realtime di praktikan.
 - Belum login → hanya layar login; gagal login menampilkan pesan jelas.
 - `npx tsc --noEmit` dan `npx expo lint` lulus.
 - UI: Flexbox, safe area, konten scroll, tombol berlabel, status tidak dibedakan hanya lewat warna, tidak terpotong pada lebar 360 dan 390.
@@ -222,13 +231,15 @@ Rules diuji dengan Rules Playground atau Firebase Emulator. Kasus uji wajib ada 
 2. Login sebagai Andi (SI-5B) di perangkat lain: sesi `s2` tampil `Dibuka`, presensi berhasil. Presensi ulang ditolak. Budi (SI-5A) tidak melihat `s2`.
 3. Di perangkat Rina, rekap `s2` menampilkan Andi **tanpa refresh**. Tutup sesi; Andi melihat status Ditutup.
 4. Pindahkan Dina dari SI-5B ke SI-5A di perangkat Rina; Dina melihat daftar sesi berubah.
-5. Login sebagai Citra, ajukan izin untuk `s1` dengan alasan "Sakit, ada surat dokter". Lihat hasil AI muncul pada pengajuannya.
-6. Rina membuka daftar izin, melihat alasan + kategori AI, memilih Setujui. Citra melihat status "Disetujui" realtime. Rekap `s1` menandai Citra "Izin".
-7. Matikan koneksi/AI: banner offline tampil; pengajuan izin saat AI mati tetap tersimpan dengan "Klasifikasi tidak tersedia".
+5. Login sebagai Citra, ajukan izin untuk `s1` dengan alasan "Sakit demam dan kurang jelas penjelasannya, ada surat dokter" (atau teks lain yang masuk kosakata model). Lihat hasil sentimen AI (`positif`/`netral`/`negatif`) muncul pada pengajuannya.
+6. Rina membuka daftar izin, melihat alasan + label sentimen AI (info pendukung), memilih Setujui. Citra melihat status "Disetujui" realtime. Rekap `s1` menandai Citra "Izin".
+7. Uji kondisi khusus:
+   - Ajukan izin dengan kata yang tidak dikenal kosakata model (mis. `"asdfghjkl qwertzxcvb"`): pengajuan tetap tersimpan dengan `label: null` dan tampil "Klasifikasi tidak tersedia" (bukan "netral"), serta tetap dapat diputuskan Asprak.
+   - Matikan koneksi internet: banner offline tampil dan aksi tulis ditolak dengan pesan jelas.
 8. Logout lalu buka ulang app: kembali ke layar login; login ulang, data tetap ada.
 
 ## Risiko dan asumsi
 - **Registrasi**: notulensi menyebut registrasi; keputusan PM adalah akun didaftarkan developer (seed). Jika dosen mewajibkan layar registrasi, tambahkan sebagai fitur terpisah (tidak diasumsikan sekarang).
-- **Format API AI** belum diketahui; semua kode AI diisolasi di `src/services/ai.ts` agar adaptasi format cukup di satu file.
+- **Domain model `model-edom.json`**: sesuai `README.md` di `model-edom.zip`, model dilatih dari komentar evaluasi perkuliahan (EDOM) bukan alasan izin praktikum, dan kelas `netral` lebih lemah. Alasan izin yang singkat/spesifik bisa menghasilkan `unknown_vocabulary` (`label: null`). Karena itu hasil AI hanya sebagai info pendukung, bukan penentu keputusan.
+- **File `model-edom.zip`**: arsip asli tetap disimpan di root repository sebagai referensi; aplikasi memakai salinan `sentiment.js` dan `model-edom.json` di `src/lib/ai/`.
 - **Plotting kelas** diasumsikan satu kelas per praktikan. Jika ternyata satu praktikan harus di banyak kelas, ubah `classId` menjadi `classIds: string[]` lewat PM sebelum fitur praktikan/pindah kelas dikerjakan.
-- `EXPO_PUBLIC_*` ikut terbundel ke aplikasi, jadi API key AI tidak benar-benar rahasia di sisi klien; cukup untuk keperluan tugas ini, tapi jangan commit key ke repository.
