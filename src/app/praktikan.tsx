@@ -1,5 +1,5 @@
-import PraktikanPresensi from '../features/praktikan-presensi';
+import PraktikanScreen from '../features/praktikan';
 
 export default function PraktikanPage() {
-  return <PraktikanPresensi user={null} />;
+  return <PraktikanScreen user={null} />;
 }
