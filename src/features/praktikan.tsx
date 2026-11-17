@@ -1,5 +1,8 @@
 
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
+
+
 import {
   Modal,
   Pressable,
@@ -23,6 +26,7 @@ export default function PraktikanScreen({
 }: {
   user: AppUser | null;
 }) {
+  const router = useRouter();
   const {
     sessions,
     schedules,
@@ -172,6 +176,28 @@ export default function PraktikanScreen({
         })}
 
         <Text style={styles.sectionTitle}>
+          Jadwal Praktikum
+        </Text>
+
+        {schedules.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyHistory}>
+              {loading ? 'Memuat jadwal...' : 'Belum ada jadwal tersedia.'}
+            </Text>
+          </View>
+        ) : (
+          schedules.map((schedule) => (
+            <View key={schedule.id} style={styles.historyCard}>
+              <Text style={styles.sessionTitle}>{schedule.course}</Text>
+              <Text style={styles.sessionInfo}>
+                Hari ke-{schedule.dayOfWeek} | {schedule.startTime} - {schedule.endTime}
+              </Text>
+              <Text style={styles.sessionInfo}>Ruang: {schedule.room}</Text>
+            </View>
+          ))
+        )}
+
+        <Text style={styles.sectionTitle}>
           2. Detail Presensi
         </Text>
 
@@ -222,6 +248,29 @@ export default function PraktikanScreen({
                     : 'Lakukan Presensi'}
           </Text>
         </Pressable>
+
+        {selectedSession && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !user }}
+            disabled={!user}
+            style={[
+              styles.attendanceButton,
+              !user && styles.disabledButton,
+              { marginTop: 10 },
+            ]}
+            onPress={() =>
+              router.push({
+                pathname: '/izin',
+                params: { sessionId: selectedSession.id },
+              })
+            }
+          >
+            <Text style={styles.attendanceButtonText}>
+              Ajukan Izin
+            </Text>
+          </Pressable>
+        )}
 
         {alreadyAttended && (
           <Text style={styles.feedbackText}>

@@ -3,7 +3,7 @@ import {
     doc,
     onSnapshot,
     runTransaction,
-    serverTimestamp,
+    serverTimestamp
 } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
@@ -51,11 +51,12 @@ export function subscribeMyPermission(
   );
 }
 
+
 export async function submitPermission(
   user: AppUser,
   session: Session,
   reason: string
-) {
+): Promise<void> {
   const trimmedReason = reason.trim();
 
   if (
@@ -63,7 +64,13 @@ export async function submitPermission(
     trimmedReason.length > 300
   ) {
     throw new Error(
-      'Alasan izin harus berisi 10–300 karakter.'
+      'Alasan izin harus berisi 10-300 karakter.'
+    );
+  }
+
+  if (!user.uid || !user.classId) {
+    throw new Error(
+      'Identitas atau kelas praktikan belum tersedia.'
     );
   }
 
@@ -79,6 +86,12 @@ export async function submitPermission(
     );
   }
 
+  const sessionRef = doc(
+    db,
+    'sessions',
+    session.id
+  );
+
   const permissionRef = doc(
     db,
     'permissions',
@@ -86,7 +99,26 @@ export async function submitPermission(
   );
 
   await runTransaction(db, async (transaction) => {
-    const existing = await transaction.get(permissionRef);
+    // Semua pembacaan dilakukan sebelum penulisan.
+    const sessionSnapshot =
+      await transaction.get(sessionRef);
+
+    const existing =
+      await transaction.get(permissionRef);
+
+    if (!sessionSnapshot.exists()) {
+      throw new Error(
+        'Sesi praktikum tidak ditemukan.'
+      );
+    }
+
+    const sessionData = sessionSnapshot.data();
+
+    if (sessionData.classId !== user.classId) {
+      throw new Error(
+        'Kelas praktikan tidak sesuai dengan sesi.'
+      );
+    }
 
     if (existing.exists()) {
       throw new Error(
