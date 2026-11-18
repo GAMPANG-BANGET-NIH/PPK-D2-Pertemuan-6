@@ -1,0 +1,150 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function user() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function role() {
+      return user().role;
+    }
+
+    function isAsprak() {
+      return signedIn() && role() == 'asprak';
+    }
+
+    function isPraktikan() {
+      return signedIn() && role() == 'praktikan';
+    }
+
+    function canReadClass() {
+      return isAsprak()
+        || (isPraktikan() && resource.data.classId == user().classId);
+    }
+
+    function session(sessionId) {
+      return get(/databases/$(database)/documents/sessions/$(sessionId)).data;
+    }
+
+    function validAttendance(data, sessionId, uid) {
+      return data.keys().hasAll(['uid', 'name', 'classId', 'attendedAt'])
+        && data.keys().hasOnly(['uid', 'name', 'classId', 'attendedAt'])
+        && uid == request.auth.uid
+        && data.uid == request.auth.uid
+        && data.name is string && data.name == user().name
+        && data.classId is string && data.classId == user().classId
+        && data.classId == session(sessionId).classId
+        && session(sessionId).status == 'dibuka'
+        && data.attendedAt == request.time;
+    }
+
+    function validAiResult(ai) {
+      return ai is map
+        && ai.keys().hasAll(['status', 'label', 'model', 'experimental'])
+        && ai.keys().hasOnly(['status', 'label', 'model', 'experimental'])
+        && ai.model == 'model-edom'
+        && ai.experimental == true
+        && ((ai.status == 'predicted' && ai.label in ['positif', 'netral', 'negatif'])
+          || (ai.status in ['unknown_vocabulary', 'empty_input', 'gagal'] && ai.label == null));
+    }
+
+    function validPermission(data, permissionId) {
+      return data.keys().hasAll([
+          'uid', 'name', 'classId', 'sessionId', 'sessionTitle', 'reason',
+          'status', 'aiResult', 'decidedBy', 'decidedAt', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'name', 'classId', 'sessionId', 'sessionTitle', 'reason',
+          'status', 'aiResult', 'decidedBy', 'decidedAt', 'createdAt'
+        ])
+        && data.uid == request.auth.uid
+        && data.name is string && data.name == user().name
+        && data.classId is string && data.classId == user().classId
+        && data.sessionId is string
+        && permissionId == data.sessionId + '_' + request.auth.uid
+        && data.classId == session(data.sessionId).classId
+        && session(data.sessionId).status in ['belum_dibuka', 'dibuka']
+        && data.sessionTitle is string
+        && data.reason is string && data.reason.size() >= 10 && data.reason.size() <= 300
+        && data.status == 'menunggu'
+        && data.decidedBy == null && data.decidedAt == null
+        && data.createdAt == request.time
+        && validAiResult(data.aiResult);
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAsprak());
+      allow create, delete: if false;
+      allow update: if isAsprak()
+        && resource.data.role == 'praktikan'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['classId'])
+        && request.resource.data.classId is string
+        && exists(/databases/$(database)/documents/classes/$(request.resource.data.classId));
+    }
+
+    match /classes/{classId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAsprak();
+    }
+
+    match /schedules/{scheduleId} {
+      allow read: if canReadClass();
+      allow create, update, delete: if isAsprak();
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if canReadClass();
+      allow create, update, delete: if isAsprak();
+
+      match /attendance/{uid} {
+        // Path ownership permits reading a missing document before transaction.set().
+        allow get: if isAsprak() || (isPraktikan() && uid == request.auth.uid);
+        allow create: if isPraktikan() && validAttendance(request.resource.data, sessionId, uid);
+        allow update, delete: if false;
+      }
+    }
+
+    // Andiny queries collectionGroup('attendance').where('uid', '==', uid).
+    // Version 2 recursive LIST required: rules are not filters. Reserve this
+    // collection-group name for attendance. No recursive get or write grants;
+    // no current-class check, so own history survives class reassignment.
+    match /{parent=**}/attendance/{uid} {
+      allow list: if isAsprak()
+        || (isPraktikan() && resource.data.uid == request.auth.uid);
+    }
+
+    match /permissions/{permissionId} {
+      function hasOwnPermissionSuffix() {
+        let suffix = '_' + request.auth.uid;
+        return permissionId.size() > suffix.size()
+          && permissionId[permissionId.size() - suffix.size():permissionId.size()] == suffix;
+      }
+
+      // Transaction preflight: only a missing document may use literal path ownership.
+      allow get: if isAsprak() || (isPraktikan()
+        && (exists(/databases/$(database)/documents/permissions/$(permissionId))
+          ? resource.data.uid == request.auth.uid
+          : hasOwnPermissionSuffix()));
+      allow list: if isAsprak()
+        || (isPraktikan() && resource.data.uid == request.auth.uid);
+      allow create: if isPraktikan() && validPermission(request.resource.data, permissionId);
+      allow update: if isAsprak()
+        && resource.data.status == 'menunggu'
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'decidedBy', 'decidedAt'])
+        && request.resource.data.status in ['disetujui', 'ditolak']
+        && request.resource.data.decidedBy == request.auth.uid
+        && request.resource.data.decidedAt == request.time;
+      allow delete: if false;
+    }
+
+    // No broad authenticated/asprak fallback: undeclared collections denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
