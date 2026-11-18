@@ -36,7 +36,10 @@ export function usePresensi(user: AppUser | null) {
 
     setLoading(true);
 
+    let active = true;
+
     const onError = (err: Error) => {
+      if (!active) return;
       setError(err.message);
       setLoading(false);
     };
@@ -44,6 +47,7 @@ export function usePresensi(user: AppUser | null) {
     const loaded = new Set<string>();
 
 const markLoaded = (source: string) => {
+  if (!active) return;
   loaded.add(source);
 
   if (loaded.size === 3) {
@@ -54,6 +58,7 @@ const markLoaded = (source: string) => {
     const unsubscribeSessions = subscribeMySessions(
       user.classId,
       (data) => {
+  if (!active) return;
   setSessions(data);
   markLoaded('sessions');
 },
@@ -63,6 +68,7 @@ const markLoaded = (source: string) => {
     const unsubscribeSchedules = subscribeMySchedules(
       user.classId,
       (data) => {
+  if (!active) return;
   setSchedules(data);
   markLoaded('schedules');
 },
@@ -72,6 +78,7 @@ const markLoaded = (source: string) => {
     const unsubscribeAttendance = subscribeMyAttendance(
       user.uid,
       (data) => {
+  if (!active) return;
   setAttendance(data);
   markLoaded('attendance');
 },
@@ -79,6 +86,7 @@ const markLoaded = (source: string) => {
     );
 
     return () => {
+      active = false;
       unsubscribeSessions();
       unsubscribeSchedules();
       unsubscribeAttendance();

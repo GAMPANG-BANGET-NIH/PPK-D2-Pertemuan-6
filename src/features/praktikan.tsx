@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 
+import { UserHeader } from '../components/user-header';
 import { usePresensi } from '../hooks/use-presensi';
 import type { AppUser, Session } from '../types';
 
@@ -85,6 +86,7 @@ export default function PraktikanScreen({
 
   return (
     <View style={styles.screen}>
+      <UserHeader />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
