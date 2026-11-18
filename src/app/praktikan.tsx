@@ -1,5 +1,7 @@
 import PraktikanScreen from '../features/praktikan';
+import { useAuth } from '../context/auth-context';
 
 export default function PraktikanPage() {
-  return <PraktikanScreen user={null} />;
+  const { user } = useAuth();
+  return <PraktikanScreen user={user} />;
 }
