@@ -310,3 +310,214 @@ Branch: `feature/praktikan-presensi-izin`. Melanjutkan modul Praktikan Sprint 1 
 - Urutan merge ke `dev`: **Dewa (Fase 0 dulu) → Mischa → Andiny → Dewa (sisa fitur)** atau mengikuti kesiapan, dengan Fase 0 selalu pertama. Setelah tiap merge: `npx tsc --noEmit`, `npx expo lint`, lalu jalankan Demo PM Sprint 2 di `PRD.md` dengan dua perangkat/akun.
 - Periksa lebar 360/390, modal bisa ditutup, konten scroll, tombol tidak tertutup keyboard/safe area.
 - Rilis/demo stabil dipromosikan `dev → main` oleh PM.
+
+
+
+
+
+# Pembagian Fitur — Project Presensi Praktikum
+## SPRINT 3 — Geolocation, Maps & Push Notification
+
+**Status:** Draft untuk disepakati tim dan PM  
+**Dokumen:** `docs/PEMBAGIAN.md` — bagian Sprint 3
+
+> **Petunjuk integrasi:** Tambahkan bagian Sprint 3 ke dokumen yang sudah ada; jangan menghapus pembagian Sprint 1–2. Nama branch dan kepemilikan file berikut adalah usulan yang harus dikonfirmasi terhadap struktur repository.
+
+## Sebelum mulai
+
+Baca `docs/PRD.md` dan `docs/PEMBAGIAN.md` (bagian Sprint 3). Pastikan autentikasi, data kelas/jadwal/sesi, izin, dan presensi Sprint 2 yang menjadi dependensi dapat diuji. Sprint 3 melanjutkan aplikasi yang ada, bukan membangunnya ulang.
+
+## 1. DEWA — SRS-06, SRS-07
+
+**Branch:** `feature/push-notification`
+
+- Integrasikan push notification melalui stack yang kompatibel dengan Expo/build proyek (FCM atau mekanisme yang sesuai).
+- Kelola izin notifikasi dan token per UID/perangkat, termasuk refresh dan logout.
+- Implementasikan pengiriman notifikasi tertarget untuk sesi dibuka, jadwal berubah, serta izin disetujui/ditolak.
+- Tempatkan pengiriman pada backend tepercaya; jangan menaruh kredensial pengiriman di aplikasi.
+- Tangani token invalid, event ganda, kegagalan pengiriman, serta foreground/background/kondisi aplikasi tertutup pada platform yang didukung.
+- Koordinasikan dengan Moses rancangan validasi presensi di backend (status sesi, role/keanggotaan, radius, duplikasi, aturan Firestore).
+- Menjadi koordinator instalasi/perubahan dependency, konfigurasi Firebase, dan perubahan Security Rules.
+
+**Output:** mekanisme push tertarget, kontrak token/event, pengujian penerima, dukungan validasi presensi tepercaya, dan dokumentasi konfigurasi.
+
+## 2. MISCHA — SRS-03, SRS-05
+
+**Branch:** `feature/laboratorium-aktivitas`
+
+- Implementasikan pengelolaan data laboratorium oleh asprak (nama, koordinat, radius, status aktif).
+- Simpan data lab di Firestore dengan validasi input dan pembatasan akses.
+- Hubungkan lab dengan jadwal dan sesi yang sudah ada, tanpa membuat sumber data ganda.
+- Sediakan informasi aktivitas praktikum yang sedang berlangsung dan berikutnya: mata praktikum, kelas, waktu, status.
+- Pastikan pembaruan jadwal/sesi tercermin realtime; bersihkan listener saat tidak digunakan.
+- Sepakati kontrak data dengan Moses agar marker/detail lab dapat digunakan di Maps.
+
+**Output:** data lab yang dapat dikelola asprak, hubungan lab–sesi, dan data aktivitas realtime yang dapat dikonsumsi halaman Maps.
+
+## 3. MOSES — SRS-01, SRS-02, SRS-04
+
+**Branch:** `feature/presensi-lokasi-maps`
+
+- Buat halaman presensi praktikan khusus, terpisah dari detail sesi.
+- Tampilkan informasi sesi, status, tombol presensi, dan pesan hasil tindakan.
+- Ambil lokasi perangkat setelah izin diberikan; tangani GPS mati, izin ditolak, timeout, dan akurasi buruk.
+- Hitung jarak pengguna–lab dari data Firestore dan tampilkan hasilnya di UI.
+- Integrasikan aksi presensi dengan mekanisme backend tepercaya yang disepakati Dewa; jangan mengandalkan validasi UI saja.
+- Pastikan sesi aktif, praktikan berhak, berada dalam radius, dan belum presensi; tampilkan pesan penolakan yang jelas.
+- Buat Maps interaktif dengan marker lab dari Firestore dan posisi pengguna yang diperbarui saat layar aktif.
+- Marker lab dapat dipilih untuk melihat detail lab serta aktivitas yang disediakan Mischa.
+- **Opsional yang direkomendasikan:** visualisasi radius dengan `Circle`; tidak wajib membuat rute/Polyline/Google Routes API.
+- Hentikan pemantauan lokasi dan listener saat layar tidak aktif.
+
+**Output:** halaman presensi GPS, integrasi penyimpanan presensi yang tervalidasi, Maps, dan pengujian kondisi gagal.
+
+## 4. PM — ANDINY
+
+**Peran:** koordinasi dan verifikasi, bukan penanggung jawab implementasi UI developer.
+
+- Finalisasi PRD, SRS, kontrak antarmodul, dan pembagian file.
+- Konfirmasi status Firebase Sprint 2, skema Firestore, serta kesiapan lingkungan pengujian.
+- Pantau dependensi Dewa–Mischa–Moses dan selesaikan konflik ownership.
+- Review PR, hasil TypeScript/lint, pengujian, dan bukti demo.
+- Pastikan tiga alur demo end-to-end berhasil sebelum pengumpulan.
+
+## Branch Sprint 3
+
+Repository: `https://github.com/GAMPANG-BANGET-NIH/PPK-D2-Pertemuan-6`  
+Integrasi: `dev`; rilis/demo stabil: `main` (verifikasi branch `dev` sebelum mulai). Branch dibuat dari `origin/dev` terbaru, bukan meneruskan branch Sprint 2 yang sudah di-merge.
+
+| Fitur | Penanggung jawab | Branch |
+|---|---|---|
+| A. Push notification, izin perangkat, keamanan integrasi | Dewa | `feature/push-notification` |
+| B. CRUD laboratorium, aktivitas lab realtime | Mischa | `feature/laboratorium-aktivitas` |
+| C. Presensi GPS, halaman presensi, Maps | Moses | `feature/presensi-lokasi-maps` |
+| Dokumentasi, review dan merge | Andiny (PM) | Dokumen melalui alur PM |
+
+## Kepemilikan file Sprint 3 — rancangan eksklusif untuk disahkan PM
+
+Daftar ini mengikuti pola file Sprint 2, tetapi **merupakan usulan** sampai struktur repository dan dependensi diperiksa. Jangan mengedit file bersama hanya karena tercantum dalam kontrak.
+
+| Orang | File yang boleh dibuat/diubah setelah disahkan |
+|---|---|
+| Dewa | `package.json`, lockfile, `app.json`, `eas.json`, `firebase.json`, `firestore.rules`, `src/lib/notifications.ts`, `src/services/notifications.ts`, `src/hooks/use-notifications.ts`, `src/types/notifications.ts`, `functions/**` (jika memakai Cloud Functions), `src/lib/firebase.ts` bila perlu |
+| Mischa | `src/app/laboratorium.tsx`, `src/features/laboratorium.tsx`, `src/features/aktivitas-lab.tsx`, `src/services/laboratorium.ts`, `src/hooks/use-laboratorium.ts`, `src/services/praktikum.ts` (hanya penambahan relasi lab, koordinasi dengan PM) |
+| Moses | `src/app/presensi-lokasi.tsx`, `src/app/maps.tsx`, `src/features/presensi-lokasi.tsx`, `src/features/maps.tsx`, `src/services/presensi.ts`, `src/services/lokasi.ts`, `src/hooks/use-lokasi.ts`, `src/app/praktikan.tsx` dan `src/features/praktikan.tsx` (penyesuaian navigasi presensi, dialihkan dari Andiny) |
+| PM | `docs/PRD.md`, `docs/PEMBAGIAN.md` |
+
+**File bersama yang perlu penanggung jawab tunggal sebelum implementasi:** `src/app/_layout.tsx` (Dewa untuk route guard/navigasi), `src/types/index.ts` (Dewa setelah menerima kontrak Mischa–Moses), `firestore.rules` (Dewa), serta perubahan service Sprint 2 yang dipakai lebih dari satu fitur. Setiap penambahan file atau perubahan ownership memerlukan persetujuan PM.
+
+## Kontrak antarmodul — sepakati sebelum coding
+
+```ts
+// Mischa: src/services/laboratorium.ts (usulan signature)
+subscribeLaboratories(onData, onError): Unsubscribe
+subscribeLabActivity(labId, onData, onError): Unsubscribe
+createLaboratory(input) / updateLaboratory(id, input) / deactivateLaboratory(id)
+
+// Moses: src/services/lokasi.ts dan src/services/presensi.ts
+getCurrentLocation(): Promise<LocationReading>
+watchUserLocation(onData, onError): Unsubscribe
+markAttendanceWithLocation(sessionId, reading): Promise<AttendanceResult>
+// Fungsi terakhir memanggil endpoint tepercaya; tidak setDoc langsung.
+
+// Dewa: kontrak push dan endpoint presensi disahkan bersama Moses
+registerPushToken(uid, token, deviceId): Promise<void>
+unregisterPushToken(uid, deviceId): Promise<void>
+// Pengiriman push terjadi di backend, bukan fungsi klien bebas sendPush(uid).
+```
+
+Nama/signature ini belum menjadi API yang sudah ada. Dewa, Mischa, dan Moses wajib menyetujui bentuk final sebelum membuat impor lintas modul.
+
+## 5. Matriks kepemilikan modul
+
+| Modul / area | Pemilik utama | Koordinasi wajib |
+|---|---|---|
+| Push, token, izin notifikasi, event delivery | Dewa | Mischa (event sesi/jadwal/izin) |
+| Firebase config, dependency, security rules | Dewa | Semua developer |
+| Endpoint/aturan presensi tepercaya | Dewa (keamanan) + Moses (integrasi presensi) | PM untuk kontrak |
+| CRUD lab dan hubungan lab–jadwal/sesi | Mischa | Moses |
+| Aktivitas lab realtime | Mischa | Moses |
+| Halaman presensi, geolocation, Maps | Moses | Mischa + Dewa |
+| PRD, pembagian, integrasi/demo | Andiny (PM) | Semua developer |
+
+**Kepemilikan file:** daftar path spesifik harus dibuat berdasarkan struktur repo aktual sebelum coding. Hindari menebak path. Perubahan file bersama, termasuk navigasi, tipe data, aturan Firestore, dan konfigurasi, harus diumumkan serta disetujui pemilik modul/PM. Modul presensi Sprint 2 yang sebelumnya dikerjakan Andiny dialihkan kepemilikannya kepada Moses untuk Sprint 3.
+
+## 6. Urutan pengerjaan dan dependensi
+
+**Tahap 0 — Audit fondasi Sprint 2**
+- Pastikan konfigurasi Firebase grup tersedia pada environment lokal (jangan commit `.env.local`).
+- Verifikasi login, role, sesi, izin, dan rekap yang akan dipakai Sprint 3.
+- Pastikan status modul AI/fitur Sprint 2 tidak diam-diam digantikan stub sementara.
+
+**Tahap 1 — Sepakati kontrak bersama**
+- Mischa + Moses: struktur `laboratories`, `labId`, field radius, status sesi, serta data aktivitas.
+- Dewa + Moses: endpoint presensi, payload lokasi, akurasi, pemeriksaan server, idempotensi, dan pembatasan direct write.
+- Dewa + Mischa: peristiwa yang memicu notifikasi, target penerima, serta mekanisme pencegahan event ganda.
+- PM: catat keputusan dalam PRD sebelum integrasi.
+
+**Tahap 2 — Implementasi paralel**
+- Mischa membangun data lab dan aktivitas realtime.
+- Moses membangun halaman presensi dan Maps dengan kontrak yang disepakati; integrasikan data nyata saat siap.
+- Dewa menyiapkan infrastruktur push dan validasi keamanan presensi.
+
+**Tahap 3 — Integrasi dan pengujian**
+- Hubungkan lab → Maps → sesi → presensi → rekap.
+- Hubungkan perubahan sesi/jadwal/izin → event backend → penerima notifikasi.
+- Uji kondisi gagal dan perbaiki konflik integrasi.
+
+## 7. Aturan kerja dan Git
+
+- Kerjakan hanya modul/file yang telah disepakati; koordinasikan perubahan lintas modul.
+- Jangan install/ubah dependency sendiri; ajukan ke Dewa.
+- Jangan commit `.env.local`, service account, token rahasia, atau kredensial.
+- Agent dilarang menjalankan `git add`, `git commit`, atau `git push`; developer melakukan manual.
+- Gunakan branch fitur masing-masing.
+- **Target PR: `dev` jika branch integrasi `dev` memang digunakan tim.** Jika repo hanya menggunakan `main`, PM harus menetapkan satu alur resmi sebelum PR pertama; jangan mengasumsikan `dev` sudah ada.
+- Sebelum PR: jalankan `npx tsc --noEmit` dan `npx expo lint`. Jika lint belum dikonfigurasi, laporkan blocker dan selesaikan konfigurasi bersama Dewa; jangan mengklaim lint lulus.
+- Bersihkan listener realtime dan subscription lokasi/notifikasi saat tidak digunakan.
+- Setiap PR menyertakan ringkasan perubahan, file yang diubah, cara menguji, hasil tes, dan screenshot/video jika relevan.
+- PM melakukan review dan persetujuan integrasi; tidak boleh merge fitur yang belum diuji tanpa mencatat risikonya.
+
+## Bukti selesai dan pemeriksaan PM
+
+Setiap developer menyerahkan: (1) daftar file berubah, (2) ringkasan fitur selesai, (3) tabel uji manual lulus/gagal beserta bukti, (4) blocker/risiko, (5) hasil `npx tsc --noEmit` dan `npx expo lint`. Jika lint meminta setup, hanya Dewa mengubah konfigurasi setelah disepakati. PM memeriksa diff dan menjalankan tiga demo bersama.
+
+**Pengujian lintas modul wajib:** Mischa mengubah radius/lab → Moses melihat perubahan di Maps; Dewa memverifikasi endpoint presensi menolak percobaan bypass; Mischa membuka sesi → Moses presensi → rekap realtime; Dewa memverifikasi hanya kelas/pemohon terkait menerima notifikasi.
+
+## 8. Checklist pengujian per developer
+
+### Dewa
+- [ ] Token terikat ke akun/perangkat yang benar dan ditangani saat refresh/logout.
+- [ ] Notifikasi sesi, jadwal, izin diterima pengguna terkait, bukan pengguna lain.
+- [ ] Kegagalan token/pengiriman dan izin notifikasi ditolak ditangani.
+- [ ] Tidak ada secret pengiriman di aplikasi klien.
+- [ ] Validasi presensi di jalur tepercaya dan direct write tidak dapat melewatinya.
+
+### Mischa
+- [ ] CRUD lab dan radius tersimpan, validasi input berjalan.
+- [ ] Pengguna tak berwenang tidak dapat mengubah lab.
+- [ ] Jadwal/sesi terhubung dengan lab yang tepat.
+- [ ] Aktivitas berlangsung/berikutnya tampil dan berubah realtime.
+
+### Moses
+- [ ] Halaman presensi terpisah dan menampilkan status sesi.
+- [ ] Dalam radius + sesi terbuka berhasil; luar radius/sesi tertutup/duplikat ditolak.
+- [ ] Izin lokasi ditolak, GPS mati, akurasi buruk, dan offline ditangani.
+- [ ] Marker lab, posisi pengguna, detail lab, dan aktivitas tampil di Maps.
+- [ ] Listener/subscription dibersihkan.
+
+## 9. Target demo Sprint 3
+
+1. **Presensi GPS:** Asprak membuka sesi → praktikan presensi berdasarkan radius → backend memvalidasi → rekap asprak realtime; tunjukkan contoh penolakan.
+2. **Maps + aktivitas:** Peta menunjukkan lokasi pengguna dan marker lab → pilih marker → aktivitas lab tampil → perubahan data terlihat realtime.
+3. **Push tertarget:** Perubahan sesi/jadwal/keputusan izin → push diterima perangkat terkait; pengguna lain tidak menerima notifikasi yang tidak relevan.
+
+## 10. Definition of Done tim
+
+- [ ] SRS-01 s.d. SRS-07 memenuhi kriteria wajib pada PRD.
+- [ ] Tiga demo berhasil pada perangkat/build yang mendukung.
+- [ ] Security Rules dan jalur validasi presensi diuji.
+- [ ] TypeScript dan lint lolos, atau blocker terdokumentasi dan diselesaikan sebelum pengumpulan.
+- [ ] Tidak ada credential/secret dalam Git.
+- [ ] PR direview dan diintegrasikan sesuai alur branch resmi.
+- [ ] PM menyetujui hasil akhir dan dokumentasi demo.
