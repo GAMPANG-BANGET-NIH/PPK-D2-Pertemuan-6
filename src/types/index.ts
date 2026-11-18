@@ -1,0 +1,12 @@
+export type Role = 'praktikan' | 'asprak';
+export type SessionStatus = 'belum_dibuka' | 'dibuka' | 'ditutup';
+export type PermissionStatus = 'menunggu' | 'disetujui' | 'ditolak';
+export type AppUser = { uid: string; name: string; email: string; role: Role; classId: string | null };
+export type ClassDoc = { id: string; name: string };
+export type Schedule = { id: string; classId: string; course: string; dayOfWeek: number; startTime: string; endTime: string; room: string };
+export type Session = { id: string; classId: string; scheduleId: string | null; title: string; date: string; startTime: string; endTime: string; status: SessionStatus; openedAt: Date | null; closedAt: Date | null };
+export type Attendance = { uid: string; name: string; classId: string; attendedAt: Date | null };
+export type SentimentLabel = 'positif' | 'netral' | 'negatif';
+export type AiStatus = 'predicted' | 'unknown_vocabulary' | 'empty_input' | 'gagal';
+export type AiResult = { status: AiStatus; label: SentimentLabel | null; model: string; experimental: boolean };
+export type PermissionRequest = { id: string; uid: string; name: string; classId: string; sessionId: string; sessionTitle: string; reason: string; status: PermissionStatus; aiResult: AiResult; decidedBy: string | null; decidedAt: Date | null; createdAt: Date | null };
