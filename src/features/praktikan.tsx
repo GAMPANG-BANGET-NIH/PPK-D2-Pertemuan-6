@@ -1,172 +1,92 @@
 
-import { useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+
+
 import {
-    Alert,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
-type UserId = 'p1' | 'p2';
-type SessionId = 's1' | 's2' | 's3';
-type SessionStatus = 'belum_dibuka' | 'dibuka' | 'ditutup';
+import { UserHeader } from '../components/user-header';
+import { usePresensi } from '../hooks/use-presensi';
+import type { AppUser, Session } from '../types';
 
-type AttendanceRecord = {
-  userId: UserId;
-  sessionId: SessionId;
-  attendedAt: string;
-};
-
-type Session = {
-  id: SessionId;
-  title: string;
-  className: string;
-  time: string;
-  status: SessionStatus;
-};
-
-const users: { id: UserId; name: string }[] = [
-  { id: 'p1', name: 'Andi' },
-  { id: 'p2', name: 'Budi' },
-];
-
-const sessions: Session[] = [
-  {
-    id: 's1',
-    title: 'Pemrograman Perangkat Bergerak',
-    className: 'SI-5A',
-    time: '08.00–09.40',
-    status: 'belum_dibuka',
-  },
-  {
-    id: 's2',
-    title: 'Basis Data',
-    className: 'SI-5B',
-    time: '10.00–11.40',
-    status: 'dibuka',
-  },
-  {
-    id: 's3',
-    title: 'Visi Komputer',
-    className: 'SI-5A',
-    time: '13.00–14.40',
-    status: 'ditutup',
-  },
-];
-
-const statusLabels: Record<SessionStatus, string> = {
+const statusLabels: Record<string, string> = {
   belum_dibuka: 'Belum Dibuka',
   dibuka: 'Dibuka',
   ditutup: 'Ditutup',
 };
 
-export default function PraktikanScreen() {
-  const [selectedUserId, setSelectedUserId] =
-    useState<UserId>('p1');
+export default function PraktikanScreen({
+  user,
+}: {
+  user: AppUser | null;
+}) {
+  const router = useRouter();
+  const {
+    sessions,
+    schedules,
+    attendance,
+    loading,
+    submitting,
+    error,
+    attend,
+  } = usePresensi(user);
 
   const [selectedSessionId, setSelectedSessionId] =
-    useState<SessionId>('s2');
+    useState<string | null>(null);
 
-  const [attendanceRecords, setAttendanceRecords] =
-    useState<AttendanceRecord[]>([]);
+  const [successSession, setSuccessSession] =
+    useState<Session | null>(null);
 
-  const recordsRef = useRef<AttendanceRecord[]>([]);
+  useEffect(() => {
+    if (
+      selectedSessionId &&
+      !sessions.some((session) => session.id === selectedSessionId)
+    ) {
+      setSelectedSessionId(null);
+    }
+  }, [sessions, selectedSessionId]);
 
-  const [sessionStatuses, setSessionStatuses] = useState<
-    Record<SessionId, SessionStatus>
-  >({
-    s1: 'belum_dibuka',
-    s2: 'dibuka',
-    s3: 'ditutup',
-  });
+  const selectedSession =
+    sessions.find((session) => session.id === selectedSessionId) ??
+    null;
 
-  const [successRecord, setSuccessRecord] =
-    useState<AttendanceRecord | null>(null);
-
-  const selectedUser = users.find(
-    (user) => user.id === selectedUserId
-  );
-
-  const selectedSession = sessions.find(
-    (session) => session.id === selectedSessionId
-  );
-
-  const currentStatus = sessionStatuses[selectedSessionId];
-
-  const alreadyAttended = attendanceRecords.some(
-    (record) =>
-      record.userId === selectedUserId &&
-      record.sessionId === selectedSessionId
-  );
+  const alreadyAttended = selectedSession
+    ? attendance.some(
+        (record) => record.sessionId === selectedSession.id
+      )
+    : false;
 
   const canAttend =
-    currentStatus === 'dibuka' && !alreadyAttended;
+    Boolean(user && selectedSession) &&
+    selectedSession?.status === 'dibuka' &&
+    !alreadyAttended &&
+    !loading &&
+    !submitting;
 
-  const userAttendanceHistory = attendanceRecords.filter(
-    (record) => record.userId === selectedUserId
-  );
+  async function handleAttendance() {
+    if (!user || !selectedSession || !canAttend) return;
 
-  const changeSessionStatus = (status: SessionStatus) => {
-    setSessionStatuses((previous) => ({
-      ...previous,
-      [selectedSessionId]: status,
-    }));
-  };
+    const success = await attend(selectedSession);
 
-  const handleAttendance = () => {
-    // Validasi dilakukan kembali saat tombol ditekan.
-    if (sessionStatuses[selectedSessionId] !== 'dibuka') {
-      Alert.alert(
-        'Presensi ditolak',
-        'Sesi praktikum belum dibuka atau sudah ditutup.'
-      );
-      return;
+    if (success) {
+      setSuccessSession(selectedSession);
     }
+  }
 
-    const duplicate = recordsRef.current.some(
-      (record) =>
-        record.userId === selectedUserId &&
-        record.sessionId === selectedSessionId
-    );
-
-    if (duplicate) {
-      Alert.alert(
-        'Sudah presensi',
-        'Praktikan ini sudah melakukan presensi pada sesi tersebut.'
-      );
-      return;
-    }
-
-    const newRecord: AttendanceRecord = {
-      userId: selectedUserId,
-      sessionId: selectedSessionId,
-      attendedAt: new Date().toISOString(),
-    };
-
-    // Ref langsung diperbarui agar ketukan cepat
-    // tidak membuat dua catatan untuk kombinasi yang sama.
-    recordsRef.current = [
-      ...recordsRef.current,
-      newRecord,
-    ];
-
-    setAttendanceRecords(recordsRef.current);
-    setSuccessRecord(newRecord);
-  };
-
-  const successUser = users.find(
-    (user) => user.id === successRecord?.userId
-  );
-
-  const successSession = sessions.find(
-    (session) => session.id === successRecord?.sessionId
-  );
+  function formatTime(session: Session) {
+    return `${session.startTime} - ${session.endTime}`;
+  }
 
   return (
     <View style={styles.screen}>
+      <UserHeader />
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -176,59 +96,43 @@ export default function PraktikanScreen() {
         </Text>
 
         <Text style={styles.subtitle}>
-          Data simulasi — Modul Praktikan
+          Presensi praktikum terhubung dengan Firebase
         </Text>
 
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
-            Mode demonstrasi. Data hanya tersimpan
-            selama aplikasi berjalan dan tidak
-            tersinkronisasi dengan modul asisten.
+            {user
+              ? `Praktikan: ${user.name}`
+              : 'Silakan login sebagai praktikan untuk melakukan presensi.'}
           </Text>
         </View>
 
-        {/* PILIH PRAKTIKAN */}
+        {loading && (
+          <Text style={styles.feedbackText}>
+            Memuat data praktikum...
+          </Text>
+        )}
+
+        {error && (
+          <Text style={styles.feedbackText}>
+            {error}
+          </Text>
+        )}
+
         <Text style={styles.sectionTitle}>
-          1. Pilih Praktikan
+          1. Pilih Sesi Praktikum
         </Text>
 
-        <View style={styles.userRow}>
-          {users.map((user) => (
-            <Pressable
-              key={user.id}
-              accessibilityRole="button"
-              accessibilityState={{
-                selected: selectedUserId === user.id,
-              }}
-              style={[
-                styles.userButton,
-                selectedUserId === user.id &&
-                  styles.selectedButton,
-              ]}
-              onPress={() => setSelectedUserId(user.id)}
-            >
-              <Text
-                style={[
-                  styles.userButtonText,
-                  selectedUserId === user.id &&
-                    styles.selectedButtonText,
-                ]}
-              >
-                {user.name}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {/* PILIH SESI */}
-        <Text style={styles.sectionTitle}>
-          2. Pilih Sesi Praktikum
-        </Text>
+        {sessions.length === 0 && !loading && (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyHistory}>
+              Belum ada sesi praktikum yang tersedia.
+            </Text>
+          </View>
+        )}
 
         {sessions.map((session) => {
-          const status = sessionStatuses[session.id];
-          const selected =
-            selectedSessionId === session.id;
+          const selected = selectedSessionId === session.id;
 
           return (
             <Pressable
@@ -239,115 +143,91 @@ export default function PraktikanScreen() {
                 styles.sessionCard,
                 selected && styles.selectedSessionCard,
               ]}
-              onPress={() =>
-                setSelectedSessionId(session.id)
-              }
+              onPress={() => setSelectedSessionId(session.id)}
             >
               <Text style={styles.sessionTitle}>
                 {session.title}
               </Text>
 
               <Text style={styles.sessionInfo}>
-                {session.className} | {session.time}
+                {session.date} | {formatTime(session)}
+              </Text>
+
+              <Text style={styles.sessionInfo}>
+                Kelas: {session.classId}
               </Text>
 
               <Text
                 style={[
                   styles.sessionStatus,
-                  status === 'dibuka'
+                  session.status === 'dibuka'
                     ? styles.openStatus
                     : styles.closedStatus,
                 ]}
               >
-                Status: {statusLabels[status]}
+                Status: {statusLabels[session.status] ?? session.status}
               </Text>
 
               {selected && (
                 <Text style={styles.selectedLabel}>
-                  ✓ Sesi dipilih
+                  Sesi dipilih
                 </Text>
               )}
             </Pressable>
           );
         })}
 
-        {/* DETAIL SESI */}
         <Text style={styles.sectionTitle}>
-          3. Detail Presensi
+          Jadwal Praktikum
+        </Text>
+
+        {schedules.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyHistory}>
+              {loading ? 'Memuat jadwal...' : 'Belum ada jadwal tersedia.'}
+            </Text>
+          </View>
+        ) : (
+          schedules.map((schedule) => (
+            <View key={schedule.id} style={styles.historyCard}>
+              <Text style={styles.sessionTitle}>{schedule.course}</Text>
+              <Text style={styles.sessionInfo}>
+                Hari ke-{schedule.dayOfWeek} | {schedule.startTime} - {schedule.endTime}
+              </Text>
+              <Text style={styles.sessionInfo}>Ruang: {schedule.room}</Text>
+            </View>
+          ))
+        )}
+
+        <Text style={styles.sectionTitle}>
+          2. Detail Presensi
         </Text>
 
         <View style={styles.detailCard}>
           <Text style={styles.detailText}>
-            Praktikan: {selectedUser?.name}
+            Praktikan: {user?.name ?? '-'}
           </Text>
 
           <Text style={styles.detailText}>
-            Sesi: {selectedSession?.title}
+            Sesi: {selectedSession?.title ?? '-'}
           </Text>
 
           <Text style={styles.detailText}>
-            Kelas: {selectedSession?.className}
+            Kelas: {selectedSession?.classId ?? '-'}
           </Text>
 
           <Text style={styles.detailText}>
-            Waktu: {selectedSession?.time}
+            Waktu: {selectedSession ? formatTime(selectedSession) : '-'}
           </Text>
 
           <Text style={styles.detailText}>
-            Status: {statusLabels[currentStatus]}
+            Status: {selectedSession
+              ? statusLabels[selectedSession.status] ??
+                selectedSession.status
+              : '-'}
           </Text>
         </View>
 
-        {/* KONTROL DEMO */}
-        <View style={styles.demoCard}>
-          <Text style={styles.demoTitle}>
-            Kontrol Status — Data Simulasi
-          </Text>
-
-          <Text style={styles.demoDescription}>
-            Ubah status sesi yang dipilih untuk
-            menguji validasi presensi. Perubahan ini
-            hanya berlaku di modul praktikan.
-          </Text>
-
-          <View style={styles.statusRow}>
-            {(
-              [
-                'belum_dibuka',
-                'dibuka',
-                'ditutup',
-              ] as SessionStatus[]
-            ).map((status) => (
-              <Pressable
-                key={status}
-                accessibilityRole="button"
-                accessibilityState={{
-                  selected: currentStatus === status,
-                }}
-                style={[
-                  styles.statusButton,
-                  currentStatus === status &&
-                    styles.activeStatusButton,
-                ]}
-                onPress={() =>
-                  changeSessionStatus(status)
-                }
-              >
-                <Text
-                  style={[
-                    styles.statusButtonText,
-                    currentStatus === status &&
-                      styles.activeStatusButtonText,
-                  ]}
-                >
-                  {statusLabels[status]}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* TOMBOL PRESENSI */}
         <Pressable
           accessibilityRole="button"
           accessibilityState={{ disabled: !canAttend }}
@@ -359,54 +239,70 @@ export default function PraktikanScreen() {
           onPress={handleAttendance}
         >
           <Text style={styles.attendanceButtonText}>
-            {alreadyAttended
-              ? 'Sudah Presensi'
-              : currentStatus !== 'dibuka'
-                ? 'Presensi Belum Tersedia'
-                : 'Lakukan Presensi'}
+            {submitting
+              ? 'Menyimpan Presensi...'
+              : alreadyAttended
+                ? 'Sudah Presensi'
+                : !selectedSession
+                  ? 'Pilih Sesi Terlebih Dahulu'
+                  : selectedSession.status !== 'dibuka'
+                    ? 'Presensi Belum Tersedia'
+                    : 'Lakukan Presensi'}
           </Text>
         </Pressable>
 
+        {selectedSession && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !user }}
+            disabled={!user}
+            style={[
+              styles.attendanceButton,
+              !user && styles.disabledButton,
+              { marginTop: 10 },
+            ]}
+            onPress={() =>
+              router.push({
+                pathname: '/izin',
+                params: { sessionId: selectedSession.id },
+              })
+            }
+          >
+            <Text style={styles.attendanceButtonText}>
+              Ajukan Izin
+            </Text>
+          </Pressable>
+        )}
+
         {alreadyAttended && (
           <Text style={styles.feedbackText}>
-            Kehadiran kamu sudah tercatat untuk
-            sesi ini.
+            Kehadiran kamu sudah tercatat untuk sesi ini.
           </Text>
         )}
 
-        {currentStatus !== 'dibuka' &&
-          !alreadyAttended && (
-            <Text style={styles.feedbackText}>
-              Presensi hanya dapat dilakukan
-              ketika status sesi Dibuka.
-            </Text>
-          )}
-
-        {/* RIWAYAT */}
         <Text style={styles.sectionTitle}>
-          4. Riwayat Presensi
+          3. Riwayat Presensi
         </Text>
 
         <Text style={styles.historyDescription}>
-          Riwayat untuk {selectedUser?.name}
+          Riwayat untuk {user?.name ?? 'praktikan'}
         </Text>
 
-        {userAttendanceHistory.length === 0 ? (
+        {attendance.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyHistory}>
-              Belum ada riwayat presensi untuk
-              praktikan ini.
+              Belum ada riwayat presensi.
             </Text>
           </View>
         ) : (
-          userAttendanceHistory.map((record) => {
+          attendance.map((record) => {
             const session = sessions.find(
               (item) => item.id === record.sessionId
             );
 
             return (
               <View
-                key={`${record.userId}-${record.sessionId}`}
+                key={record.sessionId}
                 style={styles.historyCard}
               >
                 <Text style={styles.sessionTitle}>
@@ -414,14 +310,16 @@ export default function PraktikanScreen() {
                 </Text>
 
                 <Text style={styles.sessionInfo}>
-                  {session?.className} | {session?.time}
+                  {session
+                    ? `${session.date} | ${formatTime(session)}`
+                    : 'Detail sesi tidak tersedia'}
                 </Text>
 
                 <Text style={styles.historyTime}>
                   Hadir:{' '}
-                  {new Date(
-                    record.attendedAt
-                  ).toLocaleString('id-ID')}
+                  {record.attendedAt
+                    ? record.attendedAt.toLocaleString('id-ID')
+                    : 'Menunggu sinkronisasi'}
                 </Text>
               </View>
             );
@@ -429,12 +327,11 @@ export default function PraktikanScreen() {
         )}
       </ScrollView>
 
-      {/* MODAL BERHASIL */}
       <Modal
-        visible={successRecord !== null}
+        visible={successSession !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => setSuccessRecord(null)}
+        onRequestClose={() => setSuccessSession(null)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -445,23 +342,14 @@ export default function PraktikanScreen() {
             </Text>
 
             <Text style={styles.modalDescription}>
-              Kehadiran {successUser?.name} pada
-              sesi {successSession?.title} berhasil
-              dicatat.
+              Kehadiran {user?.name ?? 'praktikan'} pada sesi{' '}
+              {successSession?.title ?? '-'} berhasil dicatat.
             </Text>
-
-            {successRecord && (
-              <Text style={styles.modalTime}>
-                {new Date(
-                  successRecord.attendedAt
-                ).toLocaleString('id-ID')}
-              </Text>
-            )}
 
             <Pressable
               accessibilityRole="button"
               style={styles.modalButton}
-              onPress={() => setSuccessRecord(null)}
+              onPress={() => setSuccessSession(null)}
             >
               <Text style={styles.modalButtonText}>
                 Tutup
@@ -474,10 +362,12 @@ export default function PraktikanScreen() {
   );
 }
 
+
+
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#FFF7FB',
+    backgroundColor: '#F8FAFC',
   },
   container: {
     padding: 20,
@@ -486,31 +376,31 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#303047',
+    color: '#0F172A',
     textAlign: 'center',
     marginTop: 12,
   },
   subtitle: {
     fontSize: 14,
-    color: '#666666',
+    color: '#64748B',
     textAlign: 'center',
     marginTop: 8,
   },
   notice: {
-    backgroundColor: '#FCE8F1',
+    backgroundColor: '#EFF6FF',
     borderRadius: 12,
     padding: 14,
     marginTop: 20,
   },
   noticeText: {
-    color: '#7A4160',
+    color: '#1E40AF',
     fontSize: 13,
     lineHeight: 20,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#303047',
+    color: '#0F172A',
     marginTop: 28,
     marginBottom: 12,
   },
@@ -524,15 +414,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E7B8CF',
+    borderColor: '#BFDBFE',
     alignItems: 'center',
   },
   selectedButton: {
-    backgroundColor: '#D85A91',
-    borderColor: '#D85A91',
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
   },
   userButtonText: {
-    color: '#303047',
+    color: '#0F172A',
     fontWeight: '600',
   },
   selectedButtonText: {
@@ -541,24 +431,24 @@ const styles = StyleSheet.create({
   sessionCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E7B8CF',
+    borderColor: '#BFDBFE',
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
   },
   selectedSessionCard: {
-    borderColor: '#D85A91',
+    borderColor: '#2563EB',
     borderWidth: 2,
     backgroundColor: '#FFF0F6',
   },
   sessionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#303047',
+    color: '#0F172A',
   },
   sessionInfo: {
     fontSize: 13,
-    color: '#666666',
+    color: '#64748B',
     marginTop: 6,
   },
   sessionStatus: {
@@ -574,7 +464,7 @@ const styles = StyleSheet.create({
   },
   selectedLabel: {
     fontSize: 12,
-    color: '#D85A91',
+    color: '#2563EB',
     fontWeight: '700',
     marginTop: 10,
   },
@@ -588,7 +478,7 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 14,
-    color: '#303047',
+    color: '#0F172A',
   },
   demoCard: {
     backgroundColor: '#FFF0F6',
@@ -596,7 +486,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginTop: 20,
     borderWidth: 1,
-    borderColor: '#E7B8CF',
+    borderColor: '#BFDBFE',
   },
   demoTitle: {
     fontSize: 15,
@@ -605,7 +495,7 @@ const styles = StyleSheet.create({
   },
   demoDescription: {
     fontSize: 12,
-    color: '#666666',
+    color: '#64748B',
     marginTop: 8,
     marginBottom: 14,
     lineHeight: 18,
@@ -617,26 +507,26 @@ const styles = StyleSheet.create({
   },
   statusButton: {
     borderWidth: 1,
-    borderColor: '#E7B8CF',
+    borderColor: '#BFDBFE',
     backgroundColor: '#FFFFFF',
     borderRadius: 9,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
   activeStatusButton: {
-    backgroundColor: '#D85A91',
-    borderColor: '#D85A91',
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
   },
   statusButtonText: {
     fontSize: 12,
-    color: '#303047',
+    color: '#0F172A',
     fontWeight: '600',
   },
   activeStatusButtonText: {
     color: '#FFFFFF',
   },
   attendanceButton: {
-    backgroundColor: '#D85A91',
+    backgroundColor: '#2563EB',
     paddingVertical: 17,
     paddingHorizontal: 20,
     borderRadius: 14,
@@ -659,7 +549,7 @@ const styles = StyleSheet.create({
   },
   historyDescription: {
     fontSize: 13,
-    color: '#666666',
+    color: '#64748B',
     marginBottom: 12,
   },
   emptyCard: {
@@ -679,7 +569,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E7B8CF',
+    borderColor: '#BFDBFE',
     padding: 16,
     marginBottom: 12,
   },
@@ -712,12 +602,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#303047',
+    color: '#0F172A',
     marginTop: 10,
   },
   modalDescription: {
     fontSize: 14,
-    color: '#666666',
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 22,
     marginTop: 12,
@@ -729,7 +619,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalButton: {
-    backgroundColor: '#D85A91',
+    backgroundColor: '#2563EB',
     borderRadius: 12,
     paddingVertical: 14,
     paddingHorizontal: 40,
