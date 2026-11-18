@@ -1,6 +1,6 @@
 
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 
 import {
@@ -43,15 +43,6 @@ export default function PraktikanScreen({
 
   const [successSession, setSuccessSession] =
     useState<Session | null>(null);
-
-  useEffect(() => {
-    if (
-      selectedSessionId &&
-      !sessions.some((session) => session.id === selectedSessionId)
-    ) {
-      setSelectedSessionId(null);
-    }
-  }, [sessions, selectedSessionId]);
 
   const selectedSession =
     sessions.find((session) => session.id === selectedSessionId) ??

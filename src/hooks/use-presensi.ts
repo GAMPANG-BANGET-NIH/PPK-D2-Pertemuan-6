@@ -1,87 +1,101 @@
-
 import { useEffect, useState } from 'react';
 
 import type { AttendanceWithSession } from '../services/presensi';
-import type { Schedule, Session } from '../types';
-
 import {
-    markAttendance,
-    subscribeMyAttendance,
-    subscribeMySchedules,
-    subscribeMySessions,
+  markAttendance,
+  subscribeMyAttendance,
+  subscribeMySchedules,
+  subscribeMySessions,
 } from '../services/presensi';
+import type { AppUser, Schedule, Session } from '../types';
+import { getErrorMessage } from '../utils/errors';
 
-import type { AppUser } from '../types';
-
-export function usePresensi(user: AppUser | null) {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [attendance, setAttendance] =
-  useState<AttendanceWithSession[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSessions([]);
-    setSchedules([]);
-    setAttendance([]);
-    setError(null);
-
-    if (!user?.uid || !user.classId) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-
-    let active = true;
-
-    const onError = (err: Error) => {
-      if (!active) return;
-      setError(err.message);
-      setLoading(false);
-    };
-
-    const loaded = new Set<string>();
-
-const markLoaded = (source: string) => {
-  if (!active) return;
-  loaded.add(source);
-
-  if (loaded.size === 3) {
-    setLoading(false);
+function toFriendlyError(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') {
+    return getErrorMessage(err);
   }
+  return err instanceof Error ? err.message : fallback;
+}
+
+type PresensiState = {
+  key: string | null;
+  sessions: Session[];
+  schedules: Schedule[];
+  attendance: AttendanceWithSession[];
+  loadedCount: number;
+  error: string | null;
 };
 
+export function usePresensi(user: AppUser | null) {
+  const uid = user?.uid ?? null;
+  const classId = user?.classId ?? null;
+  const subscriptionKey = uid && classId ? `${uid}:${classId}` : null;
+
+  const [state, setState] = useState<PresensiState>({
+    key: null,
+    sessions: [],
+    schedules: [],
+    attendance: [],
+    loadedCount: 0,
+    error: null,
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!uid || !classId || !subscriptionKey) return;
+    let active = true;
+    const loaded = new Set<string>();
+
+    const update = (patch: (prev: PresensiState) => Partial<PresensiState>) => {
+      if (!active) return;
+      setState((prev) => {
+        const base: PresensiState =
+          prev.key === subscriptionKey
+            ? prev
+            : {
+                key: subscriptionKey,
+                sessions: [],
+                schedules: [],
+                attendance: [],
+                loadedCount: 0,
+                error: null,
+              };
+        return { ...base, ...patch(base) };
+      });
+    };
+
+    const onError = (err: Error) => {
+      update(() => ({
+        error: toFriendlyError(err, 'Gagal memuat data praktikum.'),
+        loadedCount: 3,
+      }));
+    };
+
     const unsubscribeSessions = subscribeMySessions(
-      user.classId,
+      classId,
       (data) => {
-  if (!active) return;
-  setSessions(data);
-  markLoaded('sessions');
-},
+        loaded.add('sessions');
+        update((prev) => ({ sessions: data, loadedCount: loaded.size, error: prev.error }));
+      },
       onError
     );
 
     const unsubscribeSchedules = subscribeMySchedules(
-      user.classId,
+      classId,
       (data) => {
-  if (!active) return;
-  setSchedules(data);
-  markLoaded('schedules');
-},
+        loaded.add('schedules');
+        update((prev) => ({ schedules: data, loadedCount: loaded.size, error: prev.error }));
+      },
       onError
     );
 
     const unsubscribeAttendance = subscribeMyAttendance(
-      user.uid,
+      uid,
       (data) => {
-  if (!active) return;
-  setAttendance(data);
-  markLoaded('attendance');
-},
+        loaded.add('attendance');
+        update((prev) => ({ attendance: data, loadedCount: loaded.size, error: prev.error }));
+      },
       onError
     );
 
@@ -91,35 +105,38 @@ const markLoaded = (source: string) => {
       unsubscribeSchedules();
       unsubscribeAttendance();
     };
-  }, [user?.uid, user?.classId]);
+  }, [uid, classId, subscriptionKey]);
+
+  const isCurrent = subscriptionKey !== null && state.key === subscriptionKey;
+  const sessions = isCurrent ? state.sessions : [];
+  const schedules = isCurrent ? state.schedules : [];
+  const attendance = isCurrent ? state.attendance : [];
+  const loading = subscriptionKey !== null && (!isCurrent || state.loadedCount < 3);
+  const error = submitError ?? (isCurrent ? state.error : null);
 
   const attend = async (session: Session): Promise<boolean> => {
-  if (!user) {
-    setError('Pengguna belum login.');
-    return false;
-  }
+    if (!user) {
+      setSubmitError('Pengguna belum login.');
+      return false;
+    }
 
-  if (submitting) {
-    return false;
-  }
+    if (submitting) {
+      return false;
+    }
 
-  setSubmitting(true);
-  setError(null);
+    setSubmitting(true);
+    setSubmitError(null);
 
-  try {
-    await markAttendance(user, session);
-    return true;
-  } catch (err) {
-    setError(
-      err instanceof Error
-        ? err.message
-        : 'Gagal mencatat presensi.'
-    );
-    return false;
-  } finally {
-    setSubmitting(false);
-  }
-};
+    try {
+      await markAttendance(user, session);
+      return true;
+    } catch (err) {
+      setSubmitError(toFriendlyError(err, 'Gagal mencatat presensi.'));
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return {
     sessions,

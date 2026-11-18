@@ -1,42 +1,77 @@
 import { useEffect, useMemo, useState } from 'react';
 import { submitPermission, subscribeMyPermissions, type PermissionRequest } from '../services/izin';
 import type { AppUser, Session } from '../types';
+import { getErrorMessage } from '../utils/errors';
+
+function toFriendlyError(err: unknown, fallback: string): string {
+  if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') {
+    return getErrorMessage(err);
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 export function useIzin(user: AppUser | null, session: Session | null) {
-  const [permissions, setPermissions] = useState<PermissionRequest[]>([]);
-  const [loading, setLoading] = useState(false);
+  const uid = user?.uid ?? null;
+  const [live, setLive] = useState<{
+    uid: string | null;
+    permissions: PermissionRequest[];
+    error: string | null;
+    loaded: boolean;
+  }>({ uid: null, permissions: [], error: null, loaded: false });
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const uid = user?.uid;
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
-    setPermissions([]);
-    setError(null);
-    if (!uid) { setLoading(false); return; }
-    setLoading(true);
+    if (!uid) return;
     let active = true;
-    const unsubscribe = subscribeMyPermissions(uid,
-      (data) => { if (active) { setPermissions(data); setLoading(false); } },
-      (err) => { if (active) { setError(err.message); setLoading(false); } }
+    const unsubscribe = subscribeMyPermissions(
+      uid,
+      (data) => {
+        if (active) setLive({ uid, permissions: data, error: null, loaded: true });
+      },
+      (err) => {
+        if (active) {
+          setLive((prev) => ({
+            uid,
+            permissions: prev.uid === uid ? prev.permissions : [],
+            error: toFriendlyError(err, 'Gagal memuat data izin.'),
+            loaded: true,
+          }));
+        }
+      }
     );
-    return () => { active = false; unsubscribe(); };
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, [uid]);
 
-  const permission = useMemo(() =>
-    permissions.find((item) => item.sessionId === session?.id) ?? null,
+  const isCurrent = uid !== null && live.uid === uid;
+  const permissions = useMemo(
+    () => (isCurrent ? live.permissions : []),
+    [isCurrent, live.permissions]
+  );
+  const loading = uid !== null && (!isCurrent || !live.loaded);
+  const error = submitError ?? (isCurrent ? live.error : null);
+
+  const permission = useMemo(
+    () => permissions.find((item) => item.sessionId === session?.id) ?? null,
     [permissions, session?.id]
   );
 
   async function requestPermission(reason: string): Promise<boolean> {
-    if (!user || !session) { setError('Pilih sesi dan login terlebih dahulu.'); return false; }
+    if (!user || !session) {
+      setSubmitError('Pilih sesi dan login terlebih dahulu.');
+      return false;
+    }
     if (submitting) return false;
     setSubmitting(true);
-    setError(null);
+    setSubmitError(null);
     try {
       await submitPermission(user, session, reason);
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal mengajukan izin.');
+      setSubmitError(toFriendlyError(err, 'Gagal mengajukan izin.'));
       return false;
     } finally {
       setSubmitting(false);
