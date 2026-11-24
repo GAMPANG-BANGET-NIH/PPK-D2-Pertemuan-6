@@ -30,6 +30,7 @@ export function useIzin(user: AppUser | null, session: Session | null) {
         if (active) setLive({ uid, permissions: data, error: null, loaded: true });
       },
       (err) => {
+        console.error('[useIzin error]', err);
         if (active) {
           setLive((prev) => ({
             uid,

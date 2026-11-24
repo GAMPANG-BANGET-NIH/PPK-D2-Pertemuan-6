@@ -66,6 +66,7 @@ export function usePresensi(user: AppUser | null) {
     };
 
     const onError = (err: Error) => {
+      console.error('[usePresensi error]', err);
       update(() => ({
         error: toFriendlyError(err, 'Gagal memuat data praktikum.'),
         loadedCount: 3,
