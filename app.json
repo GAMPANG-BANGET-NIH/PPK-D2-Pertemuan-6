@@ -40,6 +40,12 @@
           "icon": "./assets/images/icon.png",
           "color": "#208AEF"
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Izinkan aplikasi mengakses lokasi Anda untuk verifikasi presensi praktikum dan peta laboratorium."
+        }
       ]
     ],
     "experiments": {

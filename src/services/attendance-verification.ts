@@ -55,7 +55,7 @@ export function calculateHaversineDistanceMeters(
  * Memvalidasi apakah posisi pengguna berada di dalam radius laboratorium dan memiliki akurasi GPS yang memadai.
  */
 export function validateGeolocation(input: GeolocationValidationInput): GeolocationValidationResult {
-  const maxAccuracy = input.maxAccuracyThresholdMeters ?? 50;
+  const maxAccuracy = input.maxAccuracyThresholdMeters ?? 500;
 
   if (input.userAccuracy > maxAccuracy) {
     return {
