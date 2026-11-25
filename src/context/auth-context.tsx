@@ -41,8 +41,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let source: typeof import('../services/auth');
     try { source = await import('../services/auth'); }
     catch { throw new Error(configurationMessage); }
+    if (state.user) {
+      try {
+        const { getDeviceId } = await import('../lib/notifications');
+        const { unregisterPushToken } = await import('../services/notifications');
+        const devId = await getDeviceId();
+        await unregisterPushToken(state.user.uid, devId);
+      } catch (err) {
+        console.warn('Gagal menghapus token notifikasi saat logout:', err);
+      }
+    }
     await source.signOut();
-  }, []);
+  }, [state.user]);
 
   return (
     <AuthContext.Provider value={{ ...state, signIn, signOut }}>

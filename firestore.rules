@@ -32,14 +32,25 @@ service cloud.firestore {
 
     function validAttendance(data, sessionId, uid) {
       return data.keys().hasAll(['uid', 'name', 'classId', 'attendedAt'])
-        && data.keys().hasOnly(['uid', 'name', 'classId', 'attendedAt'])
         && uid == request.auth.uid
         && data.uid == request.auth.uid
         && data.name is string && data.name == user().name
         && data.classId is string && data.classId == user().classId
         && data.classId == session(sessionId).classId
         && session(sessionId).status == 'dibuka'
-        && data.attendedAt == request.time;
+        && data.attendedAt == request.time
+        && (!('verificationMethod' in data) || data.verificationMethod in ['geolocation', 'manual'])
+        && (!('distanceMeters' in data) || data.distanceMeters is number)
+        && (!('validatedAt' in data) || data.validatedAt == request.time);
+    }
+
+    function validLaboratory(data) {
+      return data.keys().hasAll(['name', 'latitude', 'longitude', 'radiusMeters', 'active'])
+        && data.name is string && data.name.size() > 0
+        && data.latitude is number && data.latitude >= -90.0 && data.latitude <= 90.0
+        && data.longitude is number && data.longitude >= -180.0 && data.longitude <= 180.0
+        && data.radiusMeters is number && data.radiusMeters > 0
+        && data.active is bool;
     }
 
     function validAiResult(ai) {
@@ -84,6 +95,16 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['classId'])
         && request.resource.data.classId is string
         && exists(/databases/$(database)/documents/classes/$(request.resource.data.classId));
+
+      match /pushTokens/{deviceId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /laboratories/{labId} {
+      allow read: if signedIn();
+      allow create, update: if isAsprak() && validLaboratory(request.resource.data);
+      allow delete: if isAsprak();
     }
 
     match /classes/{classId} {
