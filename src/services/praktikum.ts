@@ -109,6 +109,8 @@ export type ScheduleInput = {
   startTime: string;
   endTime: string;
   room: string;
+  /** Relasi lab Sprint 3 (opsional agar pemanggil lama tetap valid). */
+  labId?: string | null;
 };
 
 export type SessionInput = {
@@ -118,6 +120,8 @@ export type SessionInput = {
   date: string;
   startTime: string;
   endTime: string;
+  /** Relasi lab Sprint 3 (opsional agar pemanggil lama tetap valid). */
+  labId?: string | null;
 };
 
 export function validateScheduleInput(input: ScheduleInput): string | null {
@@ -393,6 +397,20 @@ function currentUid(): string {
   return uid;
 }
 
+/** Lab yang dihubungkan wajib ada dan aktif (relasi Sprint 3). */
+async function assertLabUsable(labId: string | null | undefined) {
+  if (!labId) {
+    return;
+  }
+  const snap = await getDoc(doc(db, 'laboratories', labId));
+  if (!snap.exists()) {
+    fail('Laboratorium yang dipilih tidak ada. Mungkin sudah dihapus.');
+  }
+  if (snap.data().active === false) {
+    fail('Laboratorium yang dipilih sedang nonaktif. Aktifkan lab terlebih dahulu.');
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* CRUD kelas                                                          */
 /* ------------------------------------------------------------------ */
@@ -491,6 +509,7 @@ export async function createSchedule(input: ScheduleInput): Promise<void> {
   if (!(await classExists(input.classId))) {
     fail('Kelas yang dipilih tidak ada.');
   }
+  await assertLabUsable(input.labId);
   await assertScheduleUnique(input);
   await setDoc(doc(collection(db, 'schedules')), {
     classId: input.classId,
@@ -499,6 +518,7 @@ export async function createSchedule(input: ScheduleInput): Promise<void> {
     startTime: input.startTime,
     endTime: input.endTime,
     room: input.room.trim(),
+    labId: input.labId ?? null,
     createdAt: serverTimestamp(),
   });
 }
@@ -517,6 +537,7 @@ export async function updateSchedule(
   if (!(await classExists(input.classId))) {
     fail('Kelas yang dipilih tidak ada.');
   }
+  await assertLabUsable(input.labId);
   await assertScheduleUnique(input, id);
   await updateDoc(doc(db, 'schedules', id), {
     classId: input.classId,
@@ -525,6 +546,7 @@ export async function updateSchedule(
     startTime: input.startTime,
     endTime: input.endTime,
     room: input.room.trim(),
+    labId: input.labId ?? null,
   });
 }
 
@@ -583,6 +605,7 @@ export async function createSession(input: SessionInput): Promise<void> {
     fail('Kelas yang dipilih tidak ada.');
   }
   await assertScheduleBelongsToClass(input.scheduleId, input.classId);
+  await assertLabUsable(input.labId);
   await assertSessionUnique(input);
   await setDoc(doc(collection(db, 'sessions')), {
     classId: input.classId,
@@ -591,6 +614,7 @@ export async function createSession(input: SessionInput): Promise<void> {
     date: input.date,
     startTime: input.startTime,
     endTime: input.endTime,
+    labId: input.labId ?? null,
     status: 'belum_dibuka',
     openedAt: null,
     closedAt: null,
@@ -625,6 +649,7 @@ export async function updateSession(
     }
   }
   await assertScheduleBelongsToClass(input.scheduleId, input.classId);
+  await assertLabUsable(input.labId);
   await assertSessionUnique(input, id);
   await updateDoc(ref, {
     classId: input.classId,
@@ -633,6 +658,7 @@ export async function updateSession(
     date: input.date,
     startTime: input.startTime,
     endTime: input.endTime,
+    labId: input.labId ?? null,
   });
 }
 
