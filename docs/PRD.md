@@ -482,3 +482,213 @@ Pengujian rules tidak membuktikan kebenaran GPS. Endpoint backend juga perlu tes
 
 
 
+
+---
+
+# Project Presensi Praktikum
+## SPRINT 4 — Manajemen Laboratorium Aslab, Denda & Payment Gateway
+
+**Proyek:** Aplikasi Praktikum PPK (React Native / Expo / Firebase)
+**Status:** Draft untuk persetujuan tim dan PM
+**Dokumen:** `docs/PRD.md` — bagian Sprint 4
+**Prasyarat:** Fitur Sprint 1–3 (auth, kelas/jadwal/sesi, presensi, izin, geolocation, maps, push notification) telah terintegrasi dan dapat diuji.
+
+> **Petunjuk integrasi:** Dokumen ini merupakan bagian Sprint 4. Saat memasukkan ke `docs/PRD.md` yang sudah ada, pertahankan seluruh isi Sprint 1–3. Cocokkan nama koleksi, field, dan alur navigasi dengan implementasi aktual sebelum coding. Perubahan kontrak Sprint 2–3 (termasuk penambahan role baru) harus disetujui PM dan diumumkan ke semua developer.
+
+## Tujuan
+
+Sprint 4 menyempurnakan aplikasi dengan: (1) peran baru **Aslab** yang mengelola laboratorium dan distribusi praktikan/asprak per mata kuliah, (2) **dashboard keberlangsungan laboratorium** untuk aslab, (3) **pengelolaan sesi oleh Asprak** yang fokus pada pelaksanaan praktikum, (4) **perhitungan keterlambatan dengan grace period dan pengelolaan denda**, (5) **integrasi payment gateway Midtrans (sandbox)** untuk pembayaran denda, serta (6) **notifikasi dan riwayat pembayaran** yang terhubung dengan sistem notifikasi Sprint 3. Di akhir sprint, dilakukan finalisasi antarmuka agar tampilan modern, konsisten, dan mudah digunakan oleh seluruh peran pengguna.
+
+## Perubahan peran (KONTRAK — disetujui PM)
+
+| Peran | Tanggung jawab Sprint 4 | Perubahan dari sprint sebelumnya |
+|---|---|---|
+| `aslab` (BARU) | Mengelola laboratorium dan distribusi praktikan/asprak per mata kuliah; konfigurasi lab (lokasi, radius, toleransi keterlambatan, nominal denda); dashboard keberlangsungan lab. | Role baru. Konfigurasi lab yang pada Sprint 3 milik asprak **dialihkan ke aslab**. Aslab **tidak** membuka/menutup sesi dan tidak memutuskan izin. |
+| `asprak` | Mengelola pelaksanaan praktikum: melihat kelas/jadwal/sesi tanggung jawabnya, membuka/menutup sesi, memantau dan mengelola presensi praktikan. | Tidak lagi mengelola distribusi praktikan antar kelas maupun konfigurasi laboratorium (perubahan dari Sprint 2–3). Tidak memiliki kewenangan konfigurasi seluruh lab. |
+| `praktikan` | Presensi, izin, tagihan denda, pembayaran via Midtrans, riwayat pembayaran, notifikasi. | Menambah alur pembayaran denda; tidak ada perubahan alur presensi/izin. |
+
+Penambahan role memperluas kontrak Sprint 2: `users/{uid}.role` kini bernilai `"praktikan" | "asprak" | "aslab"`. Perubahan ini wajib diimplementasikan lebih dulu pada tipe, route guard, dan Security Rules (pemilik: Dewa — Fase 0). Rute khusus aslab: `/aslab` dan turunannya. Peran salah membuka rute lain dialihkan ke beranda perannya.
+
+## Kebutuhan fungsional dan kriteria penerimaan
+
+### SRS-08 — Manajemen laboratorium oleh Aslab (Andiny)
+**User story:** Sebagai aslab, saya ingin mengelola laboratorium dan distribusi praktikan/asprak sesuai mata kuliah tanggung jawab saya, termasuk konfigurasi presensi dan denda.
+
+**Kriteria penerimaan:**
+- Aslab dapat menambahkan dan mengelola data laboratorium (nama, lokasi/koordinat, radius validasi presensi, status aktif).
+- Tersedia **bulk insert dan single insert yang dipisah** untuk tiga jenis data, bukan satu bulk gabungan: (a) membuat sejumlah laboratorium sekaligus berdasarkan satu mata kuliah, (b) memasukkan data praktikan ke laboratorium tertentu, (c) memasukkan data asprak ke laboratorium tertentu.
+- Tersedia **file template insert yang dapat diunduh** untuk setiap opsi bulk insert (3 template terpisah).
+- Untuk bulk insert, setiap row data yang diunggah ditampilkan sebagai **list dalam scroll view** yang dapat diatur fleksibel oleh aslab: accept/deny per row, update, dan mengisi data yang masih kosong sebelum di-commit ke Firestore.
+- Aslab dapat **memindahkan praktikan** dari satu laboratorium ke laboratorium lainnya. Tidak ada perpindahan jadwal praktikum; yang berpindah hanya praktikan dan asprak-nya.
+- Aslab dapat mengatur **cakupan lokasi presensi** (koordinat + radius) dan **batasan keterlambatan waktu** (grace period) per laboratorium/mata kuliah.
+- Validasi input: koordinat valid, radius positif, grace period dan nominal denda dalam batas operasional yang disepakati; baris bulk yang tidak valid dapat diperbaiki di layar review sebelum ditulis.
+- Asprak dan praktikan tidak dapat mengubah konfigurasi lab maupun distribusi anggota (ditolak oleh rules, bukan hanya UI).
+
+### SRS-09 — Dashboard keberlangsungan laboratorium (Andiny)
+**User story:** Sebagai aslab, saya ingin memantau kegiatan praktikum pada seluruh laboratorium yang dikelola dari satu dashboard.
+
+**Kriteria penerimaan:**
+- Dashboard menampilkan: jumlah laboratorium dan praktikan; status kegiatan praktikum pada setiap lab; informasi lokasi dan waktu pelaksanaan; jadwal praktikum yang sedang berlangsung dan yang akan datang; riwayat kegiatan laboratorium; dan riwayat keuangan hasil denda praktikum.
+- Tersedia **filter berdasarkan hari, minggu, dan bulan** agar pemantauan lebih terstruktur.
+- Seluruh informasi dashboard memanfaatkan data jadwal, sesi, presensi, dan denda yang tersimpan di **Firebase (Firestore)** — bukan data dummy dan bukan sumber data baru yang menggandakan jadwal/sesi.
+- Kartu/ringkasan angka diperbarui realtime bersama perubahan data; kondisi loading, error, kosong, dan terisi ditangani dengan jelas.
+- Riwayat keuangan hanya menampilkan agregat (total, jumlah transaksi, status) dari koleksi denda/pembayaran; aslab tidak membaca data pembayaran pribadi di luar agregat.
+
+### SRS-10 — Pengelolaan sesi oleh Asprak (Moses)
+**User story:** Sebagai asprak, saya ingin mengelola pelaksanaan praktikum di kelas/laboratorium tanggung jawab saya: melihat daftar kelas, jadwal, dan sesi, lalu membuka, memantau, dan menutup sesi.
+
+**Kriteria penerimaan:**
+- Asprak melihat daftar kelas, jadwal, dan sesi praktikum yang menjadi tanggung jawabnya (dari Firestore, realtime).
+- Asprak dapat **membuka sesi** ketika praktikum dimulai dan **menutup sesi** setelah selesai; transisi tetap `belum_dibuka → dibuka → ditutup`.
+- Asprak dapat **memantau dan mengelola presensi praktikan** saat sesi berlangsung: rekap realtime per sesi (Hadir / Terlambat / Izin / Belum hadir) dengan waktu presensi.
+- Perubahan status sesi **tersinkronisasi realtime** dengan aplikasi praktikan (tanpa restart), termasuk memicu notifikasi yang sudah ada dari Sprint 3.
+- Asprak **tidak memiliki kewenangan** mengelola distribusi praktikan antar lab maupun konfigurasi laboratorium (ditolak oleh rules).
+- Asprak hanya melihat dan mengelola sesi pada lab/kelas yang menjadi tanggung jawabnya.
+
+### SRS-11 — Perhitungan keterlambatan dan pengelolaan denda (Moses — logika status & UI; Dewa — backend tagihan & rules)
+**User story:** Sebagai sistem, saya ingin menentukan keterlambatan dari waktu presensi praktikan dibanding waktu mulai sesi, lalu menerbitkan tagihan denda tetap untuk setiap kejadian keterlambatan.
+
+**Kriteria penerimaan:**
+- Keterlambatan ditentukan dari waktu presensi praktikan versus waktu mulai sesi praktikum, menggunakan **grace period** sebagai batas toleransi. Presensi sebelum atau tepat pada akhir masa toleransi = tepat waktu; setelahnya = terlambat.
+- Durasi toleransi **dapat dikonfigurasi** sesuai kebijakan praktikum (oleh aslab, SRS-08).
+- UI rekap asprak membedakan status kehadiran: **Hadir (tepat waktu)**, **Terlambat (+menit)**, **Izin (excused)**, dan **Belum hadir** — bukan dibedakan warna saja.
+- Denda menggunakan **nominal tetap** untuk setiap kejadian keterlambatan; nominal dikonfigurasi aslab.
+- Setiap kejadian keterlambatan hanya menghasilkan **satu tagihan** (idempoten); tagihan terhubung dengan identitas praktikan, sesi, dan catatan presensi terkait.
+- Tagihan denda dibuat oleh **backend tepercaya** (bukan tulisan langsung dari klien) ketika presensi terlambat tercatat valid; direct client write ke koleksi tagihan ditolak rules.
+- **Pembayaran denda tidak mengubah status kehadiran** praktikan.
+- Praktikan yang memperoleh **izin disetujui** dicatat sebagai **tidak hadir dengan izin (excused absence)** dan **dibebaskan dari denda keterlambatan**. Keputusan izin **tidak mengubah** catatan kehadiran menjadi hadir. Jika tagihan sudah terbit sebelum izin disetujui, tagihan dibatalkan/ditiadakan oleh backend dengan status yang tercatat.
+
+### SRS-12 — Integrasi Payment Gateway Midtrans (Dewa)
+**User story:** Sebagai praktikan, saya ingin membayar denda keterlambatan melalui payment gateway (Midtrans, sandbox) langsung dari aplikasi.
+
+**Kriteria penerimaan:**
+- Lingkungan **Sandbox Midtrans** (tidak menggunakan uang asli).
+- Fitur wajib: menampilkan daftar tagihan dan rincian nominal denda; membuat transaksi pembayaran melalui backend; mengarahkan praktikan ke halaman/metode pembayaran payment gateway; menangani respons transaksi dan **callback/webhook** dari payment gateway; menampilkan status pembayaran **pending / success / failed**; memperbarui status tagihan berdasarkan hasil verifikasi; menyediakan riwayat transaksi dan pembayaran praktikan.
+- Seluruh proses mengikuti alur **client – server – payment gateway**. Informasi sensitif (**server key / secret**) **tidak boleh disimpan di aplikasi React Native** dan tidak masuk git.
+- Status pembayaran **tidak boleh** ditentukan hanya dari respons sisi client; status final diverifikasi backend melalui callback/webhook yang valid (cek signature/authenticity).
+- Transaksi idempoten: satu tagihan tidak menghasilkan duplikat order; retry webhook tidak menduplikasi pembaruan status.
+- Kegagalan pembayaran, webhook tidak valid, dan offline ditangani dengan pesan jelas; status tagihan tetap konsisten dengan kondisi sebenarnya.
+
+### SRS-13 — Notifikasi dan riwayat pembayaran (Dewa — backend notifikasi; UI riwayat praktikan)
+**User story:** Sebagai praktikan, saya ingin menerima pemberitahuan ketika tagihan denda dibuat, pembayaran berhasil, atau pembayaran gagal, serta dapat melihat riwayat pembayaran saya kapan pun.
+
+**Kriteria penerimaan:**
+- Notifikasi terintegrasi dengan sistem notifikasi Sprint 3 dan dikirim pada saat: **tagihan denda baru dibuat**, **pembayaran berhasil**, dan **pembayaran gagal / membutuhkan penyelesaian lebih lanjut**.
+- Penerima notifikasi ditentukan backend dari data tagihan (pemilik tagihan), bukan pilihan bebas dari klien.
+- Tersedia **halaman riwayat pembayaran** yang menampilkan: sesi, tanggal tagihan, nominal, waktu transaksi, dan status pembayaran.
+- Riwayat pembayaran **persisten** (tersimpan di Firestore) dan tetap tersedia meskipun aplikasi ditutup dan dibuka kembali.
+- Kondisi loading, error, dan kosong ditangani dengan jelas; kegagalan push tidak membatalkan perubahan status pembayaran yang sudah tersimpan.
+
+## Rancangan data Firestore — kontrak tambahan Sprint 4 (usulan PM, wajib disepakati)
+
+Kontrak Sprint 2–3 **tetap dipertahankan** (`users`, `classes`, `schedules`, `sessions`, `attendance`, `permissions`, `laboratories`, `pushTokens`). Perubahan skema di bawah wajib disetujui PM sebelum kode dibuat.
+
+```text
+users/{uid}
+  role: "praktikan" | "asprak" | "aslab"      // role "aslab" BARU (perluasan kontrak Sprint 2)
+
+laboratories/{labId}                          // perluasan kontrak Sprint 3
+  name: string
+  latitude: number | null                     // null diizinkan saat dibuat via bulk menunggu dilengkapi aslab
+  longitude: number | null
+  radiusMeters: number | null
+  mataKuliah: string                          // mata kuliah tanggung jawab lab
+  gracePeriodMinutes: number                  // batasan keterlambatan (SRS-08)
+  lateFineAmount: number                      // nominal tetap denda per kejadian (SRS-11)
+  active: boolean
+  createdAt / updatedAt: Timestamp
+
+laboratories/{labId}/praktikan/{uid}          // distribusi praktikan ke lab (baru)
+  uid, name, classId, addedBy, addedAt
+
+laboratories/{labId}/asprak/{uid}             // distribusi asprak ke lab (baru)
+  uid, name, addedBy, addedAt
+
+sessions/{sessionId}/attendance/{uid}         // perluasan kontrak Sprint 2–3
+  ...field lama
+  onTime: boolean                             // true jika dalam grace period
+  lateMinutes: number                         // 0 jika tepat waktu
+
+fines/{fineId}                                // BARU — dibuat HANYA oleh backend tepercaya
+  uid: string
+  name: string
+  sessionId: string
+  sessionTitle: string
+  attendancePath: string                      // referensi catatan presensi terkait
+  amount: number
+  status: "pending" | "paid" | "failed" | "dibatalkan"
+  canceledReason: string | null               // mis. izin disetujui setelah tagihan terbit
+  createdAt / updatedAt: Timestamp
+
+payments/{paymentId}                          // BARU — ditulis HANYA oleh backend tepercaya
+  fineId: string
+  uid: string
+  orderId: string                             // order id Midtrans (unik, idempoten)
+  amount: number
+  status: "pending" | "success" | "failed"
+  paymentType: string | null                  // dari Midtrans
+  transactionTime: Timestamp | null
+  createdAt / updatedAt: Timestamp
+```
+
+Catatan desain:
+- **Bulk insert** (SRS-08) diproses sebagai staging di sisi klien: file dibaca, tiap row menjadi item list scroll view untuk accept/deny/update/lengkapi, lalu commit tulisan yang lolos ke Firestore. Tidak perlu koleksi staging; tulisan yang gagal dilaporkan per row.
+- Konfigurasi grace period dan nominal denda dibaca presensi/backend dari `laboratories`, bukan konstanta hard-coded.
+- Status kehadiran "Izin (excused)" tetap dihitung dari `permissions` berstatus `disetujui` (kontrak Sprint 2); tidak ada dokumen attendance palsu yang dibuat.
+- Hindari query `where`+`orderBy` lintas field berbeda tanpa composite index; urutkan di klien bila memungkinkan.
+
+## Keputusan PM Sprint 4 (final)
+
+| Topik | Keputusan |
+|---|---|
+| Role aslab | Role terpisah (`aslab`), bukan flag pada asprak. Seed menambahkan akun aslab contoh. Penambahan role lewat Fase 0 (Dewa). |
+| Konfigurasi lab | Dialihkan dari asprak (Sprint 3) ke aslab. Rules diperbarui: tulis `laboratories` hanya aslab. |
+| Penerbitan tagihan | Otomatis oleh backend tepercaya (Cloud Functions) saat presensi terlambat valid tercatat; bukan klien. |
+| Grace period & nominal | Per laboratorium, dikonfigurasi aslab; disimpan di `laboratories`. |
+| Payment gateway | Midtrans **Sandbox**, Snap. Kredensial server hanya di Cloud Functions/environment, tidak pernah di klien. |
+| Status pembayaran | Final hanya dari webhook terverifikasi di backend; respons klien hanya status sementara. |
+| Excused absence | Izin disetujui = tetap tidak hadir dengan izin, bebas denda; tidak mengubah attendance menjadi hadir. |
+| Notifikasi | Memakai infrastruktur push Sprint 3; event tagihan/pembayaran ditambahkan ke backend pengiriman. |
+| Finalisasi UI | Konsistensi tema/label antar peran, safe area, scroll, tidak terpotong pada lebar 360 dan 390. |
+
+## Security Rules — tambahan Sprint 4 (dikerjakan Dewa)
+
+| Objek | Baca | Tulis |
+|---|---|---|
+| `users` | Ketentuan Sprint 2 + aslab boleh baca praktikan/asprak untuk distribusi | Perubahan `role` dilarang dari klien (seed/backend saja). Asprak tidak lagi mengubah `classId` (distribusi kini via lab oleh aslab). |
+| `laboratories` | Pengguna login | **Hanya aslab** (perubahan dari Sprint 3 yang asprak). Validasi koordinat/radius/grace/nominal. |
+| `laboratories/{id}/praktikan`, `.../asprak` | Aslab lab terkait; asprak lab terkait baca anggotanya | **Hanya aslab** lab terkait (tambah/hapus/pindah anggota). |
+| `attendance` | Ketentuan Sprint 2–3 | Tetap: presensi GPS hanya backend tepercaya; field `onTime`/`lateMinutes` diisi backend. |
+| `fines` | Pemilik tagihan; asprak lab terkait; aslab (agregat) | **Hanya backend tepercaya.** Direct client create/update/delete ditolak. |
+| `payments` | Pemilik transaksi | **Hanya backend tepercaya** (pembuatan transaksi + update dari webhook). |
+
+Kasus uji rules wajib (semua ditolak kecuali ditandai ok) ada di `PEMBAGIAN.md` bagian Dewa.
+
+## Alur demo wajib Sprint 4
+
+**Demo A — Aslab & dashboard:** Aslab login → membuat lab via single insert → bulk insert praktikan dari file template → review scroll view (accept/update/deny per row) → commit → memindahkan satu praktikan ke lab lain → set radius dan grace period → membuka dashboard: jumlah lab/praktikan, status kegiatan, jadwal berlangsung/berikutnya, riwayat kegiatan dan keuangan denda dengan filter hari/minggu/bulan berubah sesuai data.
+
+**Demo B — Sesi, keterlambatan & denda:** Asprak membuka sesi → praktikan presensi dalam grace period (Hadir) → praktikan lain presensi setelah grace period (Terlambat +menit) → backend menerbitkan tepat satu tagihan denda untuk praktikan terlambat → asprak menutup sesi → praktikan dengan izin disetujui tampil "Izin" dan tidak mendapat tagihan.
+
+**Demo C — Pembayaran Midtrans:** Praktikan melihat tagihan → membuat transaksi via backend → diarahkan ke halaman pembayaran Midtrans sandbox → menyelesaikan pembayaran → webhook backend memverifikasi → status tagihan menjadi `paid`, status pembayaran `success`, notifikasi diterima → riwayat pembayaran menampilkan transaksi dan tetap ada setelah app ditutup-dibuka → ulangi satu skenario pembayaran gagal/pending → praktikan yang tidak terkait tidak menerima notifikasi.
+
+## Pengujian minimum
+
+- Bulk insert: template unduhan benar; row invalid dapat diperbaiki/deny; commit tidak menghasilkan duplikat; pindah praktikan terlihat realtime di sisi terkait.
+- Dashboard: filter hari/minggu/bulan; angka sesuai data Firestore; kondisi kosong/loading/error.
+- Sesi: buka/tutup realtime lintas peran; asprak tidak dapat mengubah lab/distribusi; aslab tidak dapat membuka sesi.
+- Keterlambatan: tepat waktu, tepat di akhir grace period, terlambat 1 menit setelah grace period; satu tagihan per kejadian; presensi ulang tidak menerbitkan tagihan kedua.
+- Denda: izin disetujui setelah tagihan terbit → tagihan dibatalkan; pembayaran tidak mengubah kehadiran.
+- Payment: transaksi dibuat via backend; webhook valid memperbarui status; webhook palsu/tanpa signature ditolak; offline dan gagal jaringan ditangani; tidak ada secret di klien/git.
+- Notifikasi: tagihan baru, berhasil, gagal sampai ke pemilik tagihan saja.
+- UI final: lebar 360/390, scroll, safe area, status tidak hanya warna.
+
+## Definition of Done Sprint 4
+
+- Semua kriteria penerimaan SRS-08 s.d. SRS-13 yang wajib terpenuhi.
+- Tiga demo end-to-end (A, B, C) berhasil pada perangkat/build yang mendukung dan terdokumentasi.
+- Security Rules Sprint 4 diuji (playground/emulator); tidak ada direct client write pada `fines`/`payments`.
+- Tidak ada secret (server key Midtrans, service account) dalam commit.
+- `npx tsc --noEmit` dan `npx expo lint` lulus (atau blocker terdokumentasi dan diselesaikan).
+- PR direview PM (Mischa), konflik integrasi diselesaikan, hasil uji dicatat.
+- Finalisasi UI: konsisten, modern, mudah digunakan untuk seluruh peran.

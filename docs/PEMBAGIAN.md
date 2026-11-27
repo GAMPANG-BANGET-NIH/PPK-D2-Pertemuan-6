@@ -521,3 +521,207 @@ Setiap developer menyerahkan: (1) daftar file berubah, (2) ringkasan fitur seles
 - [ ] Tidak ada credential/secret dalam Git.
 - [ ] PR direview dan diintegrasikan sesuai alur branch resmi.
 - [ ] PM menyetujui hasil akhir dan dokumentasi demo.
+
+---
+
+# Pembagian Fitur — Project Presensi Praktikum
+## SPRINT 4 — Manajemen Lab Aslab, Denda & Payment Gateway — SPRINT AKTIF
+
+**Status:** Draft untuk disepakati tim dan PM
+**Dokumen:** `docs/PEMBAGIAN.md` — bagian Sprint 4
+**Prasyarat:** Baca `PRD.md` bagian **SPRINT 4** (SRS-08 s.d. SRS-13, model data, rules, demo) dan `AGENTS.md`. Pastikan fitur Sprint 1–3 yang menjadi dependensi dapat diuji.
+
+> **Petunjuk integrasi:** Bagian Sprint 3 tidak dihapus; arsipnya tetap di atas. Perubahan kepemilikan dibawah ini disahkan PM (Mischa) sebelum coding.
+
+## Struktur tim Sprint 4
+
+| Orang | Peran Sprint 4 | Catatan kontinuitas |
+|---|---|---|
+| **Mischa** | **PM** (dokumen, review, merge; tidak coding) | Sebelumnya developer Asprak/aktivitas lab (Sprint 2–3). Kepemilikan modul lab dialihkan ke Andiny, modul sesi/presensi lanjut ke Moses, payment & notifikasi lanjut ke Dewa. |
+| **Dewa** | Developer | Sprint 2: fondasi Firebase, auth, AI lokal, security rules, review izin. Sprint 3: push notification + backend tepercaya. → Cocok untuk **denda (backend), Midtrans, notifikasi pembayaran, rules.** |
+| **Andiny** | Developer | Sprint 2: sisi praktikan (presensi, izin, riwayat, CRUD view). Sprint 3: PM. → Cocok untuk **manajemen lab oleh aslab (bulk insert, distribusi, konfigurasi) dan dashboard.** |
+| **Moses** | Developer | Sprint 2: jadwal & navigasi. Sprint 3: presensi GPS, halaman presensi, maps. → Cocok untuk **pengelolaan sesi asprak dan perhitungan keterlambatan** (melanjutkan modul presensi-nya sendiri). |
+
+Pembagian di atas membuat setiap developer mendapat **dua kelompok kebutuhan** dari enam kebutuhan Sprint 4, dengan bobot yang setara, dan setiap kelompok menyambung dengan pekerjaan developer yang sama pada sprint sebelumnya.
+
+## Branch Sprint 4
+
+Repository: `https://github.com/GAMPANG-BANGET-NIH/PPK-D2-Pertemuan-6`
+Integrasi: `dev`; rilis/demo stabil: `main`. Branch dibuat dari `origin/dev` terbaru, bukan meneruskan branch Sprint 3 yang sudah di-merge. Agent DILARANG `git add/commit/push`; developer melakukan manual. PR menuju `dev`; PM review dan merge satu per satu.
+
+| Fitur | Penanggung jawab | Branch |
+|---|---|---|
+| A. Denda (backend), Payment Gateway Midtrans, notifikasi & riwayat pembayaran | Dewa | `feature/denda-payment-gateway` |
+| B. Manajemen laboratorium oleh Aslab (bulk/single insert, distribusi, konfigurasi) + Dashboard keberlangsungan lab | Andiny | `feature/aslab-laboratorium-dashboard` |
+| C. Pengelolaan sesi oleh Asprak + perhitungan keterlambatan (grace period, status kehadiran, excused absence) | Moses | `feature/asprak-sesi-keterlambatan` |
+| Dokumentasi, review dan merge | Mischa (PM) | Dokumen melalui alur PM |
+
+## Urutan kerja (ada satu ketergantungan awal)
+
+1. **Fase 0 — Fondasi (Dewa, dikerjakan PERTAMA):** tambahkan role `aslab` ke `Role` di `src/types/index.ts`, route guard `_layout.tsx` (rute aslab), seed akun aslab, perluasan `firestore.rules` (aslab + fines/payments backend-only), dan skeleton Cloud Functions (endpoint pembuatan transaksi + webhook Midtrans + trigger tagihan denda) dengan kontrak di bawah. PM merge ke `dev` secepatnya; Andiny dan Moses `merge origin/dev` ke branch masing-masing begitu tersedia.
+2. **Fase 1 — Paralel:** Andiny dan Moses **boleh langsung mulai** menulis UI, hook, dan service berdasarkan kontrak (impor dari path kontrak). Pengujian dengan rules baru dan Midtrans sandbox menunggu Fase 0 di-merge. Dewa melanjutkan fitur payment dan notifikasi.
+3. **Fase 2 — Integrasi (PM + semua):** merge satu per satu, jalankan Demo A/B/C di PRD Sprint 4, perbaiki bug lintas fitur oleh pemilik modulnya.
+
+## Kepemilikan file Sprint 4 — tidak boleh overlap
+
+Path relatif root repository. File di luar daftar milik sendiri **tidak boleh disentuh**. Perubahan file bersama wajib izin PM.
+
+| Orang | File yang boleh dibuat/diubah |
+|---|---|
+| **Dewa** | `package.json`, lockfile, `functions/**`, `firestore.rules`, `firebase.json`, `.env.example` (variabel Midtrans tanpa nilai), `.env.local` (lokal, tidak di-commit), `scripts/seed.*` (tambah akun aslab), `src/types/index.ts` (role aslab, tipe fines/payments), `src/app/_layout.tsx` (route guard aslab + praktikan tagihan), `src/app/tagihan.tsx`, `src/app/riwayat-pembayaran.tsx`, `src/features/tagihan.tsx`, `src/features/riwayat-pembayaran.tsx`, `src/services/pembayaran.ts`, `src/hooks/use-pembayaran.ts`, `src/lib/notifications.ts` / `src/services/notifications.ts` (penambahan event denda/pembayaran), `src/lib/firebase.ts` bila perlu |
+| **Andiny** | `src/app/aslab.tsx`, `src/app/aslab-lab.tsx`, `src/app/aslab-bulk.tsx`, `src/app/aslab-dashboard.tsx`, `src/features/aslab-*.tsx`, `src/services/aslab.ts`, `src/services/bulk-insert.ts`, `src/hooks/use-aslab.ts`, `src/hooks/use-dashboard.ts`, `src/utils/template.ts` (pembuat file template unduhan), `src/services/laboratorium.ts` (diambil alih dari Mischa Sprint 3, penyesuaian sesuai kontrak baru — disahkan PM) |
+| **Moses** | `src/app/asprak-sesi.tsx` (atau penggantian isi `src/app/asisten.tsx`/`src/app/rekap.tsx` milik jalur asprak — disahkan PM sebelum edit), `src/features/asprak-sesi.tsx`, `src/features/rekap-kehadiran.tsx`, `src/services/sesi.ts`, `src/services/keterlambatan.ts`, `src/hooks/use-sesi.ts`, `src/hooks/use-keterlambatan.ts`, penyesuaian navigasi `src/app/praktikan.tsx` (tampilan status kehadiran/izin, dialihkan dari Andiny) |
+| **PM (Mischa)** | `docs/PRD.md`, `docs/PEMBAGIAN.md` |
+
+- **Hanya Dewa** yang boleh menambah/mengubah dependency dan konfigurasi Cloud Functions/Firebase. Butuh paket → minta Dewa.
+- Butuh file di luar daftar atau perubahan model data → minta PM memperbarui dokumen **sebelum** coding.
+- Jangan impor kode *fitur* milik teman; yang boleh diimpor hanya modul fondasi/kontrak yang disepakati di bawah.
+
+## Kontrak antarmodul — sepakati sebelum coding
+
+```ts
+// Dewa: src/types/index.ts (perluasan)
+export type Role = 'praktikan' | 'asprak' | 'aslab';
+export type FineStatus = 'pending' | 'paid' | 'failed' | 'dibatalkan';
+export type PaymentStatus = 'pending' | 'success' | 'failed';
+export type Fine = { id, uid, name, sessionId, sessionTitle, amount, status: FineStatus, canceledReason, createdAt };
+export type Payment = { id, fineId, uid, orderId, amount, status: PaymentStatus, paymentType, transactionTime, createdAt };
+
+// Dewa: Cloud Functions (backend tepercaya) — kontrak trigger & endpoint
+// onCreate sessions/{id}/attendance/{uid} where onTime == false -> buat fines/{id} idempoten (1 tagihan per presensi terlambat)
+// onUpdate permissions -> disetujui: batalkan fines pending milik pemohon utk sesi tsb (status 'dibatalkan', canceledReason)
+// callable createPayment(fineId) -> { token, redirectUrl }   (Midtrans Snap, sandbox, server key hanya di functions)
+// webhook notification Midtrans -> verifikasi signature -> update payments + fines (idempoten per orderId)
+// event notifikasi: fine.created, payment.success, payment.failed -> kirim ke pemilik tagihan via infrastruktur push Sprint 3
+
+// Dewa: src/services/pembayaran.ts (klien)
+subscribeMyFines(uid, cb, onError): Unsubscribe
+subscribeMyPayments(uid, cb, onError): Unsubscribe
+createPayment(fineId): Promise<{ token: string; redirectUrl: string }>   // memanggil callable, TIDAK menulis payments langsung
+
+// Andiny: src/services/aslab.ts
+subscribeLaboratories(cb, onError): Unsubscribe                      // lanjutan kontrak Sprint 3, filter milik aslab
+subscribeLabMembers(labId, role: 'praktikan' | 'asprak', cb, onError): Unsubscribe
+createLaboratory(input) / updateLaboratory(id, input) / deactivateLaboratory(id)
+bulkCreateLaboratories(rows): Promise<BulkResult>                    // commit hanya row yang di-accept
+bulkAddMembers(labId, role, rows): Promise<BulkResult>
+movePraktikanToLab(uid, fromLabId, toLabId): Promise<void>
+setPresensiConfig(labId, { latitude, longitude, radiusMeters, gracePeriodMinutes, lateFineAmount }): Promise<void>
+
+// Andiny: src/services/bulk-insert.ts + src/utils/template.ts
+parseInsertFile(uri, kind: 'laboratories' | 'praktikan' | 'asprak'): ParsedRow[]
+buildTemplateFile(kind): Uri                                        // 3 template terpisah, dapat diunduh/dibagikan
+
+// Andiny: src/services/dashboard.ts (agregat dari data Firestore, bukan sumber baru)
+subscribeDashboardStats(filter: 'hari' | 'minggu' | 'bulan', cb, onError): Unsubscribe
+
+// Moses: src/services/sesi.ts
+subscribeAsprakSessions(asprakUid, cb, onError): Unsubscribe         // sesi pada lab/kelas tanggung jawab asprak
+subscribeSessionAttendance(sessionId, cb, onError): Unsubscribe      // lanjutan rekap, dengan onTime/lateMinutes
+openSession(id) / closeSession(id)
+
+// Moses: src/services/keterlambatan.ts (logika tampilan; penulisan field tetap backend)
+resolveAttendanceStatus(attendance, permissionsApproved, gracePeriodMinutes): 'hadir' | 'terlambat' | 'izin' | 'belum_hadir'
+```
+
+Signatures ini adalah usulan; Dewa, Andiny, dan Moses wajib menyetujui bentuk final sebelum impor lintas modul dibuat. Perubahan kontrak lewat PM.
+
+## Fitur A — Denda, Payment Gateway Midtrans, Notifikasi & Riwayat Pembayaran (Dewa)
+Branch: `feature/denda-payment-gateway`. Kebutuhan PRD: SRS-11 (backend tagihan & rules), SRS-12, SRS-13.
+
+**A0. Fase 0 (serahkan lebih dulu):**
+- Perluas `Role` menjadi `'praktikan' | 'asprak' | 'aslab'`; perbarui route guard (`/aslab*` khusus aslab; peran salah dialihkan ke beranda perannya); seed akun aslab contoh (idempoten); perbarui `firestore.rules` sesuai tabel PRD Sprint 4; skeleton `functions/` berisi kontrak trigger/endpoint di atas (boleh stub yang aman, tanpa secret).
+- Tambahkan variabel Midtrans ke `.env` lingkungan functions (sandbox client key/server key) — **tidak pernah** di klien, git, log, atau dokumen. `.env.example` hanya nama variabel.
+
+**A1. Penerbitan tagihan denda (backend, SRS-11):**
+- Trigger pada presensi terlambat (`onTime == false`) yang valid: buat **satu** dokumen `fines` (idempoten; cek tagihan untuk pasangan uid+sesi+attendancePath). Nominal dari `laboratories.lateFineAmount` saat itu.
+- Saat izin praktikan disetujui: batalkan tagihan `pending` milik pemohon untuk sesi tersebut (`status: 'dibatalkan'`, `canceledReason`), tanpa mengubah `attendance`.
+- Pembayaran tidak pernah mengubah dokumen `attendance`.
+
+**A2. Midtrans Sandbox (SRS-12):**
+- Callable `createPayment(fineId)`: validasi pemilik tagihan, buat order unik, panggil Midtrans Snap (sandbox), simpan `payments {status:'pending'}`, kembalikan token/redirect URL ke klien.
+- Webhook/notification handler: verifikasi signature, update `payments` dan `fines` secara idempoten; webhook tanpa signature valid ditolak; status final **hanya** dari backend.
+- Layar `/tagihan`: daftar tagihan milik praktikan (realtime), rincian nominal, tombol bayar (nonaktif saat proses), arahkan ke halaman/metode pembayaran, tampilkan status pending/success/failed.
+- Idempotensi: satu tagihan tidak bisa menghasilkan dua order aktif; retry webhook tidak menduplikasi update.
+
+**A3. Notifikasi & riwayat pembayaran (SRS-13):**
+- Tambahkan event `fine.created`, `payment.success`, `payment.failed` ke backend pengiriman push Sprint 3; penerima = pemilik tagihan (bukan pilihan klien); tangani token invalid dan pengiriman ganda.
+- Layar `/riwayat-pembayaran`: sesi, tanggal tagihan, nominal, waktu transaksi, status; realtime dan persisten (tersedia setelah app ditutup-dibuka); kondisi loading/error/kosong.
+
+**A4. Security Rules Sprint 4:**
+- Terapkan tabel rules PRD Sprint 4 (`laboratories` hanya aslab; subkoleksi anggota hanya aslab; `fines`/`payments` hanya backend; `role` tidak dapat diubah klien).
+- Kasus uji wajib (playground/emulator), semuanya ditolak kecuali ditandai ok:
+  1. Tanpa login: baca/tulis apa pun.
+  2. Asprak/praktikan menulis `laboratories` atau subkoleksi anggota. (Aslab menulis = ok.)
+  3. Asprak mengubah `users.classId` praktikan (kini dilarang); siapa pun mengubah `role` sendiri.
+  4. Klien membuat/mengubah/menghapus `fines` atau `payments` langsung.
+  5. Praktikan membaca `fines`/`payments` milik orang lain. (Pemilik membaca miliknya = ok.)
+  6. Asprak lab membaca `fines` labnya untuk rekap = ok; aslab membaca agregat = ok.
+  7. Praktikan/aslab membuka/menutup sesi; asprak menulis konfigurasi lab. (Asprak membuka sesi tanggung jawabnya = ok.)
+- Simpan ringkasan hasil uji (tabel lulus/gagal) untuk PM.
+
+**Tes mandiri Dewa:** tagihan hanya satu per kejadian terlambat; izin disetujui membatalkan tagihan pending; pembayaran sandbox sukses mengubah `fines.status='paid'` via webhook; webhook palsu ditolak; tidak ada secret di klien/git; notifikasi sampai ke pemilik tagihan saja; riwayat pembayaran bertahan setelah app ditutup-dibuka; role aslab dijaga per rute.
+
+## Fitur B — Manajemen Laboratorium Aslab + Dashboard (Andiny)
+Branch: `feature/aslab-laboratorium-dashboard`. Kebutuhan PRD: SRS-08, SRS-09. Melanjutkan data lab Sprint 3 (yang kini dikelola aslab, bukan asprak).
+
+- `/aslab` (`src/features/aslab-*.tsx`): beranda aslab dengan `UserHeader`; daftar laboratorium milik aslab (per mata kuliah), tautan ke pengelolaan lab, bulk insert, dan dashboard. Kondisi kosong/loading/error di semua layar.
+- Pengelolaan lab: tambah/lihat/ubah/nonaktifkan lab (nama, koordinat, radius, status aktif); validasi koordinat/radius sesuai PRD; set **cakupan lokasi presensi** dan **batasan keterlambatan** (grace period) serta nominal denda per lab.
+- **Tiga bulk insert terpisah** (laboratorium per mata kuliah; praktikan ke lab; asprak ke lab), masing-masing dengan **single insert** tersendiri; **3 file template unduhan terpisah** via `src/utils/template.ts`.
+- Layar review bulk (`/aslab-bulk`): setiap row file menjadi item dalam **scroll view** yang dapat diatur fleksibel: accept/deny per row, update, isi data yang masih kosong; hanya row yang di-accept yang di-commit; hasil per row dilaporkan (berhasil/gagal + alasan).
+- Pindah praktikan antar lab (`movePraktikanToLab`): konfirmasi, tolak lab tujuan sama/tidak ada; perpindahan terlihat realtime di sisi terkait. **Tidak ada** perpindahan jadwal praktikum.
+- `/aslab-dashboard` (`src/services/dashboard.ts` + `src/hooks/use-dashboard.ts`): jumlah lab & praktikan; status kegiatan tiap lab; lokasi & waktu pelaksanaan; jadwal berlangsung/berikutnya; riwayat kegiatan; riwayat keuangan denda (agregat). **Filter hari/minggu/bulan**. Semua dari Firestore (`schedules`, `sessions`, `attendance`, `fines`, `payments`) — tanpa sumber data baru. Realtime, listener di-`unsubscribe` saat unmount.
+- Setiap aksi tulis: tombol nonaktif saat proses, `getErrorMessage`, tolak saat offline (`useNetwork`), modal konfirmasi untuk aksi destruktif/pindah.
+- Tes mandiri: single & bulk insert (row valid/invalid/deny/perbaikan); template unduhan benar untuk 3 jenis; pindah praktikan; set radius/grace/nominal; dashboard angka sesuai data uji dan berubah realtime; filter hari/minggu/bulan; asprak/praktikan tidak bisa mengubah lab (ditolak rules); offline menolak tulis; tutup-buka app data tetap; lebar 360/390.
+
+## Fitur C — Pengelolaan Sesi Asprak + Keterlambatan (Moses)
+Branch: `feature/asprak-sesi-keterlambatan`. Kebutuhan PRD: SRS-10, SRS-11 (logika status & UI). Melanjutkan modul presensi/maps Moses Sprint 3.
+
+- `/asprak-sesi` (`src/features/asprak-sesi.tsx`): daftar kelas, jadwal, dan sesi pada lab/kelas tanggung jawab asprak (realtime, dari Firestore). Tombol buka sesi (saat praktikum dimulai) dan tutup sesi (setelah selesai) dengan modal konfirmasi; transisi `belum_dibuka → dibuka → ditutup`; batal modal tidak mengubah data; perubahan status tersinkron realtime ke praktikan (termasuk notifikasi Sprint 3).
+- Pantau & kelola presensi: rekap realtime per sesi via `subscribeSessionAttendance` + daftar anggota lab + izin disetujui; status per praktikan: **Hadir (tepat waktu) / Terlambat (+menit) / Izin (excused) / Belum hadir** — teks, bukan warna saja; ringkasan jumlah. Field `onTime`/`lateMinutes` dibaca dari dokumen presensi (diisi backend), asprak tidak mengubahnya.
+- `src/services/keterlambatan.ts`: `resolveAttendanceStatus` memakai grace period dari `laboratories` (bukan hard-coded); **izin disetujui = Izin (excused)**, tetap tidak hadir, bebas denda, dan tidak pernah diubah menjadi hadir.
+- Asprak **tidak memiliki** aksi konfigurasi lab atau distribusi praktikan/asprak di modul ini (tidak ada tombol; ditolak rules).
+- Penyesuaian `src/app/praktikan.tsx` (dialihkan dari Andiny, disahkan PM): label status presensi "Hadir"/"Terlambat x menit" dan tautan ke `/tagihan` bila ada tagihan.
+- Setiap listener di-`unsubscribe` saat unmount; tombol nonaktif saat proses; error via `getErrorMessage`; offline menolak aksi tulis.
+- Tes mandiri: buka → presensi praktikan → rekap berubah realtime → tutup sesi; tepat waktu vs terlambat (di/paska grace period); izin disetujui tampil "Izin" dan tidak dihitung terlambat; sesi ditutup tidak dibuka ulang; asprak menolak ditulis ke lab/distribusi (rules); lebar 360/390.
+
+## Aturan kerja (mewarisi Sprint 2–3)
+
+- Edit **hanya file milik sendiri**. Jangan `npm install`/`expo install` (hanya Dewa). Agent DILARANG `git add/commit/push`; developer manual setelah memeriksa diff. Tidak force-push, tidak push ke branch teman, tidak push langsung ke `main`/`dev`.
+- Jangan mengarang nama koleksi/field di luar model data PRD Sprint 4; jika kurang, minta PM.
+- Jangan menaruh server key Midtrans, service account, atau secret apa pun di file yang masuk git, log, komentar, atau pesan commit.
+- Selalu unsubscribe listener; tangani loading/error/kosong; pesan error Bahasa Indonesia lewat `getErrorMessage`.
+- Sebelum PR: jalankan `npx tsc --noEmit` dan `npx expo lint`; jika gagal karena file/konfigurasi milik orang lain, laporkan blocker, jangan diperbaiki sendiri.
+- Konflik → berhenti, laporkan file dan dua perubahan yang bertabrakan; pemilik file memperbaiki setelah PM menyetujui.
+
+## Bukti selesai dan pemeriksaan PM (Sprint 4)
+
+- Tiap developer menyerahkan: daftar file berubah, fitur selesai, tabel hasil tes mandiri (lulus/gagal), kekurangan nyata. Dewa menambah tabel hasil uji Security Rules. Jangan klaim berhasil untuk yang belum diuji.
+- PM (Mischa) memeriksa diff PR hanya berisi file milik pembuat PR, tanpa `.env*`, service account, atau server key.
+- Urutan merge ke `dev`: **Dewa (Fase 0 dulu) → Andiny → Moses → Dewa (sisa fitur)** atau mengikuti kesiapan, dengan Fase 0 selalu pertama. Setelah tiap merge: `npx tsc --noEmit`, `npx expo lint`, lalu jalankan demo PRD terkait.
+- Pengujian lintas modul wajib: Andiny set grace period/nominal → Moses melihat status keterlambatan sesuai konfigurasi; Moses presensi terlambat → Dewa memverifikasi tepat satu tagihan terbit; Dewa webhook sukses → tagihan `paid` terlihat di layar Moses (kehadiran tidak berubah) dan riwayat pembayaran praktikan; Andiny mengubah anggota lab → sesi/rekap Moses mengikuti.
+- Periksa lebar 360/390, modal bisa ditutup, konten scroll, tombol tidak tertutup keyboard/safe area.
+- Rilis/demo stabil dipromosikan `dev → main` oleh PM.
+
+## Checklist pengujian per developer
+
+### Dewa
+- [ ] Role `aslab` didukung di tipe, route guard, seed, dan rules.
+- [ ] Tagihan denda tepat satu per kejadian terlambat; izin disetujui membatalkan tagihan pending.
+- [ ] Midtrans sandbox: transaksi via backend, webhook terverifikasi memperbarui status, webhook palsu ditolak, idempoten.
+- [ ] Tidak ada secret di klien/git; alur client–server–gateway terpenuhi.
+- [ ] Notifikasi tagihan/sukses/gagal hanya ke pemilik tagihan; riwayat pembayaran persisten.
+
+### Andiny
+- [ ] Single & bulk insert terpisah untuk 3 jenis data; 3 template unduhan benar.
+- [ ] Review bulk: scroll view, accept/deny/update/isi kosong per row; hanya row accepted ter-commit.
+- [ ] Pindah praktikan antar lab berjalan realtime; tidak ada perpindahan jadwal.
+- [ ] Radius, grace period, dan nominal denda dapat diatur dan tersimpan.
+- [ ] Dashboard lengkap dengan filter hari/minggu/bulan dari data Firestore.
+
+### Moses
+- [ ] Daftar kelas/jadwal/sesi tanggung jawab asprak tampil realtime.
+- [ ] Buka/tutup sesi tersinkron realtime ke praktikan; transisi dan modal konfirmasi benar.
+- [ ] Rekap membedakan Hadir/Terlambat/Izin/Belum hadir sesuai grace period dari `laboratories`.
+- [ ] Izin disetujui tetap "Izin (excused)" dan tidak diubah menjadi hadir.
+- [ ] Asprak tidak dapat mengubah lab/distribusi; listener dibersihkan.
