@@ -1,5 +1,5 @@
-import RekapScreen from '../features/asisten-rekap';
+import RekapKehadiranScreen from '../features/rekap-kehadiran';
 
 export default function RekapPage() {
-  return <RekapScreen />;
+  return <RekapKehadiranScreen />;
 }

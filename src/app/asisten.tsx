@@ -1,5 +1,5 @@
-import AsistenScreen from '../features/asisten';
+import AsprakSesiScreen from '../features/asprak-sesi';
 
 export default function AsistenPage() {
-  return <AsistenScreen />;
+  return <AsprakSesiScreen />;
 }
